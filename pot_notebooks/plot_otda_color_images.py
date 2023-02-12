@@ -21,7 +21,7 @@ SIAM Journal on Imaging Sciences, 7(3), 1853-1882.
 
 import os
 from pathlib import Path
-
+import cv2
 import numpy as np
 from matplotlib import pyplot as plt
 import ot
@@ -33,7 +33,6 @@ rng = np.random.RandomState(42)
 def im2mat(img):
     """Converts an image to matrix (one pixel per line)"""
     return img.reshape((img.shape[0] * img.shape[1], img.shape[2]))
-
 
 def mat2im(X, shape):
     """Converts back a matrix to an image"""
@@ -50,10 +49,19 @@ def minmax(img):
 
 # Loading images
 this_file = os.path.realpath('__file__')
-data_path = os.path.join(Path(this_file).parent.parent.parent, 'data')
+data_path = os.path.join(Path(this_file).parent.parent.parent, 'Thesis/Optimal_transport_playground')
 
-I1 = plt.imread(os.path.join(data_path, 'ocean_day.jpg')).astype(np.float64) / 256
-I2 = plt.imread(os.path.join(data_path, 'ocean_sunset.jpg')).astype(np.float64) / 256
+I1 = cv2.imread('IMG_2005.jpg')
+I2 = cv2.imread('20220819_181050.jpg')
+
+I1 = cv2.cvtColor(I1, cv2.COLOR_BGR2RGB)
+I2 = cv2.cvtColor(I2, cv2.COLOR_BGR2RGB)
+
+I1 = I1.astype(np.float64) / 256
+I2 = I2.astype(np.float64) / 256
+
+I1 = cv2.resize(I1, (int(I1.shape[1]/8), int(I1.shape[0]/8)))
+I2 = cv2.resize(I2, (int(I2.shape[1]/8), int(I2.shape[0]/8)))
 
 X1 = im2mat(I1)
 X2 = im2mat(I2)
@@ -131,6 +139,11 @@ I2t = minmax(mat2im(transp_Xt_emd, I2.shape))
 I1te = minmax(mat2im(transp_Xs_sinkhorn, I1.shape))
 I2te = minmax(mat2im(transp_Xt_sinkhorn, I2.shape))
 
+cv2.imwrite('image 1 adapt.png', I1t)
+cv2.imwrite('image 1 adapt(reg).png', I1te)
+cv2.imwrite('image 2 adapt.png', I2t)
+cv2.imwrite('image 2 adapt(reg).png', I2te)
+
 
 ##############################################################################
 # Plot new images
@@ -139,34 +152,30 @@ I2te = minmax(mat2im(transp_Xt_sinkhorn, I2.shape))
 plt.figure(3, figsize=(8, 4))
 
 plt.subplot(2, 3, 1)
-plt.imshow(I1)
 plt.axis('off')
 plt.title('Image 1')
 
 plt.subplot(2, 3, 2)
-plt.imshow(I1t)
 plt.axis('off')
 plt.title('Image 1 Adapt')
+plt.savefig('Image 1 Adapt')
 
 plt.subplot(2, 3, 3)
-plt.imshow(I1te)
 plt.axis('off')
 plt.title('Image 1 Adapt (reg)')
+plt.savefig('Image 1 Adapt(reg)')
 
 plt.subplot(2, 3, 4)
-plt.imshow(I2)
 plt.axis('off')
 plt.title('Image 2')
 
 plt.subplot(2, 3, 5)
-plt.imshow(I2t)
 plt.axis('off')
 plt.title('Image 2 Adapt')
+plt.savefig('Image 1 Adapt')
 
 plt.subplot(2, 3, 6)
-plt.imshow(I2te)
 plt.axis('off')
 plt.title('Image 2 Adapt (reg)')
+plt.savefig('Image 2 Adapt(reg)')
 plt.tight_layout()
-
-plt.show()
