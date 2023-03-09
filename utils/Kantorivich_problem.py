@@ -43,9 +43,9 @@ def create_constraints(source, target):
     p_matrix = cp.Variable((len(source), len(target)), nonneg=True)
 
     # noinspection PyTypeChecker
-    cons = [cp.sum(p_matrix, axis=0) == 1,  # column
-            cp.sum(p_matrix, axis=1) == 1,  # row
-            p_matrix >= 0]
+    cons = [cp.sum(p_matrix, axis=0) == target,  # column sum should be what we move from the pixel the column represents
+            cp.sum(p_matrix, axis=1) == source,  # row sum should be what we move from the pixel the row represents
+            p_matrix >= 0]  # all elements of p should be non-negative
 
     return p_matrix, cons
 
@@ -68,6 +68,8 @@ def solve_transport(source, target, cost_matrix):
     - The sum of each row of transport plan is equal to the corresponding element of source.
     - transport plan is element-wise non-negative.
     """
+    source /= sum(source)  # Normalize the source
+    target /= sum(target)  # Normalize the target
     p, constraints = create_constraints(source, target)
 
     obj = cp.Minimize(cp.sum(cp.multiply(p, cost_matrix)))
@@ -99,7 +101,17 @@ def calculate_costs(im1, im2):
     """
     S = im1.reshape(-1)
     T = im2.reshape(-1)
-    costs = np.abs(S[:, np.newaxis] - T)
+
+    costs = np.zeros([len(S), len(T)])
+
+    m,n = im1.shape
+    for i in range(m):
+        for j in range(n):
+            for k in range(m):
+                for l in range(n):
+                    location_x = (i * n) + j
+                    location_y = (k * n) + l
+                    costs[location_x, location_y] += np.sqrt((i - k) ** 2 + (j - l) ** 2)
     return costs, S, T
 
 def image_2_pixels_left(im):
@@ -116,23 +128,49 @@ def image_2_pixels_left(im):
     Then it removes the last 2 pixels from the left side of the image using `img_moved_left = img_moved_left[:, :-2]`
     Finally, it returns the image after moving it 2 pixels to the left.
     """
-    img_moved_left = cv2.copyMakeBorder(im, 0, 0, 2, 0, cv2.BORDER_CONSTANT, value=255)
-    img_moved_left = img_moved_left[:, :-2]
+    img_moved_left = cv2.copyMakeBorder(im, 0, 0, 1, 0, cv2.BORDER_CONSTANT, value=255)
+    img_moved_left = img_moved_left[:, :-1]
     return img_moved_left
+
+def create_image(size, pixel_location):
+    """
+    Creates a black and white image with the specified size and a white pixel at the specified location.
+
+    Args:
+        size: A tuple of the form (width, height) representing the size of the image in pixels.
+        pixel_location: A tuple of the form (x, y) representing the location of the white pixel in the image.
+
+    Returns:
+        An image represented as a numpy array with shape (height, width) and dtype np.uint8.
+        The white pixel will be at the specified location, and all other pixels will be black.
+    """
+    # Create a numpy array of zeros with the specified size
+    img = np.zeros(size, dtype=np.uint8)
+
+    # Set the specified pixel to white (255)
+    img[pixel_location[1], pixel_location[0]] = 255
+
+    # Return the image
+    return img
 
 if __name__ == '__main__':
     start_time = time.time()
-    image_1_path = r'C:\Users\eriki\Documents\school\Thesis\Optimal_transport_playground\mnist_image_1.jpg'
+    image_1_path = r'C:\Users\eriki\Documents\school\Thesis\Optimal_transport_playground\images\mnist_image_1.jpg'
     image_1 = cv2.imread(image_1_path, cv2.IMREAD_GRAYSCALE)
 
+    # image_2_path = r'C:\Users\eriki\Documents\school\Thesis\Optimal_transport_playground\images\im2_test.png'
+    # image_moved_left = cv2.imread(image_2_path, cv2.IMREAD_GRAYSCALE)
     image_moved_left = image_2_pixels_left(image_1)
+
+    image_1 = image_1.astype(np.float64)
+    image_moved_left = image_moved_left.astype(np.float64)
 
     costs, source_im_1d, target_im_1d = calculate_costs(image_1, image_moved_left)
 
     min_cost, transport_matrix = solve_transport(source_im_1d, target_im_1d, costs)
 
-    print(min_cost/max(image_1.shape))
-    print(transport_matrix)
+    print(min_cost)
+    # print(transport_matrix)
     end = time.time()
     elaplsed = end - start_time
     print(f"elapsed time: {elaplsed} seconds")
