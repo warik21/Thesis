@@ -2,7 +2,9 @@ import numpy as np
 import cvxpy as cp
 import cv2
 import time
-
+import ot
+import ott
+from scipy.spatial.distance import cdist
 """
 The script starts by importing the time library, which is used to measure the execution time of the script.
 
@@ -68,8 +70,6 @@ def solve_transport(source, target, cost_matrix):
     - The sum of each row of transport plan is equal to the corresponding element of source.
     - transport plan is element-wise non-negative.
     """
-    source /= sum(source)  # Normalize the source
-    target /= sum(target)  # Normalize the target
     p, constraints = create_constraints(source, target)
 
     obj = cp.Minimize(cp.sum(cp.multiply(p, cost_matrix)))
@@ -79,32 +79,22 @@ def solve_transport(source, target, cost_matrix):
 
     return prob.value, p.value
 
-def calculate_costs(im1, im2):
+def calculate_costs(size: int):
     """
-    This function takes two input images, `im1` and `im2`, and calculates the costs of transporting pixels from the first image to the second image.
+    This function takes the size of the images, and calculates the costs of transporting
+    pixels from one position to the other. Returns a mapping of euclidean distances.
 
     Parameters:
-    - `im1` (numpy.ndarray): A 2D array representing the first image.
-    - `im2` (numpy.ndarray): A 2D array representing the second image.
+    - `size` (int): A 2D array representing the first image.
 
     Returns:
-    - `costs` (numpy.ndarray): A 2D array representing the matrix of costs of transporting pixels from the first image to the second image.
-    - `S` (numpy.ndarray): A 1D array representing the reshaped first image.
-    - `T` (numpy.ndarray): A 1D array representing the reshaped second image.
-
-    This function starts by reshaping the two input images `im1` and `im2` into 1D arrays `S` and `T` respectively.
-    It then calculates the costs of transporting each pixel from image 1 to image 2 by using numpy's `np.abs(S[:, np.newaxis] - T)`.
-    This calculates the absolute difference between each pixel in the first image and each pixel in the second image,
-    the result is the matrix of costs where the element in the i-th row and j-th column is the absolute difference between the i-th
-    pixel in the first image and the j-th pixel in the second image. This matrix of costs is returned as the first output. The reshaped
-    first image `S` and the reshaped second image `T` are returned as the second and the third output respectively.
+    - `costs` (numpy.ndarray): A 2D array representing the matrix of costs of transporting pixels
+                                from the first image to the second image.
     """
-    S = im1.reshape(-1)
-    T = im2.reshape(-1)
 
-    costs = np.zeros([len(S), len(T)])
+    costs = np.zeros([size, size])
 
-    m,n = im1.shape
+    m,n = int(np.sqrt(size)), int(np.sqrt(size))
     for i in range(m):
         for j in range(n):
             for k in range(m):
@@ -112,9 +102,9 @@ def calculate_costs(im1, im2):
                     location_x = (i * n) + j
                     location_y = (k * n) + l
                     costs[location_x, location_y] += np.sqrt((i - k) ** 2 + (j - l) ** 2)
-    return costs, S, T
+    return costs
 
-def image_2_pixels_left(im):
+def image_2_pixels_left(im: np.ndarray):
     """
     This function takes an image, `im` and moves it 2 pixels to the left.
 
@@ -132,9 +122,9 @@ def image_2_pixels_left(im):
     img_moved_left = img_moved_left[:, :-1]
     return img_moved_left
 
-def create_image(size, pixel_location):
+def create_image(size: tuple, pixel_location: tuple):
     """
-    Creates a black and white image with the specified size and a white pixel at the specified location.
+    Creates a Grayscale image with the specified size(all pixels black) and a white pixel at the specified location.
 
     Args:
         size: A tuple of the form (width, height) representing the size of the image in pixels.
@@ -153,6 +143,19 @@ def create_image(size, pixel_location):
     # Return the image
     return img
 
+def solve_kantorovich(im1: np.ndarray, im2: np.ndarray, costs:np.ndarray):
+    im1 = im1.astype(np.float64)
+    im2 = im2.astype(np.float64)
+
+    im1_norm = im1 / sum(sum(im1))
+    im2_norm = im2 / sum(sum(im2))
+
+    im1_norm = im1_norm.flatten()
+    im2_norm = im2_norm.flatten()
+
+    min_cost, transport_matrix = solve_transport(im1_norm, im2_norm, costs)
+    return min_cost, transport_matrix
+
 if __name__ == '__main__':
     start_time = time.time()
     image_1_path = r'C:\Users\eriki\Documents\school\Thesis\Optimal_transport_playground\images\mnist_image_1.jpg'
@@ -164,13 +167,27 @@ if __name__ == '__main__':
 
     image_1 = image_1.astype(np.float64)
     image_moved_left = image_moved_left.astype(np.float64)
+    image_1 = image_1 / sum(sum(image_1))  # Normalize
+    image_moved_left = image_moved_left / sum(sum(image_moved_left))  # Normalize
 
-    costs, source_im_1d, target_im_1d = calculate_costs(image_1, image_moved_left)
+    source_im_1d = image_1.flatten()
+    target_im_1d = image_moved_left.flatten()
 
-    min_cost, transport_matrix = solve_transport(source_im_1d, target_im_1d, costs)
+    costs = calculate_costs(len(image_1.flatten()))
 
-    print(min_cost)
+    # min_cost, transport_matrix = solve_transport(source_im_1d, target_im_1d, costs)
+
+    # print(min_cost)
     # print(transport_matrix)
     end = time.time()
     elaplsed = end - start_time
-    print(f"elapsed time: {elaplsed} seconds")
+    print(f"elapsed time for my implementation: {elaplsed} seconds")
+
+    start_time_pot = time.time()
+    wasserstein_dist = ot.emd2(image_1.flatten(), image_moved_left.flatten(), costs)
+    end_time_pot = time.time()
+    elapsed = end_time_pot - start_time_pot
+    wasserstein_dist_exact = ot.lp.emd(image_1.flatten(), image_moved_left.flatten(), costs)
+    elapsed_exact_pot = time.time() - end_time_pot
+    print(f"elapsed time for pot implementation: {elapsed} seconds")
+    print(f"elapsed time for exact pot implementation: {elapsed_exact_pot} seconds")
