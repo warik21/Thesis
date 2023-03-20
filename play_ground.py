@@ -1,13 +1,5 @@
-import timeit
-import ot
-import jax
 import jax.numpy as jnp
-import numpy as np
-import cv2
-import matplotlib.pyplot as plt
-import mpl_toolkits.axes_grid1
 
-import ott
 from ott.geometry import pointcloud
 from ott.problems.linear import linear_problem
 from ott.solvers.linear import sinkhorn

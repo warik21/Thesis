@@ -25,6 +25,7 @@ The script prints the minimum cost divided by the square root of the number of p
 Finally, the script calculates the elapsed time of the script and prints it to the console.
 """
 
+cp.settings.TOL
 def create_constraints(source, target):
     """
     This function takes two lists as input and creates a matrix variable and a set of constraints.
@@ -158,7 +159,7 @@ def solve_kantorovich(im1: np.ndarray, im2: np.ndarray, costs:np.ndarray):
 
 if __name__ == '__main__':
     start_time = time.time()
-    image_1_path = r'C:\Users\eriki\Documents\school\Thesis\Optimal_transport_playground\images\mnist_image_1.jpg'
+    image_1_path = r'/images/mnist_image_1.jpg'
     image_1 = cv2.imread(image_1_path, cv2.IMREAD_GRAYSCALE)
 
     # image_2_path = r'C:\Users\eriki\Documents\school\Thesis\Optimal_transport_playground\images\im2_test.png'
