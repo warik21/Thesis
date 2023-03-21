@@ -3,7 +3,7 @@ import cvxpy as cp
 import cv2
 import time
 import ot
-import ott
+# import ott
 from scipy.spatial.distance import cdist
 """
 The script starts by importing the time library, which is used to measure the execution time of the script.
