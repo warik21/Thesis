@@ -3,7 +3,7 @@ import cvxpy as cp
 import cv2
 import time
 import ot
-import ott
+# import ott
 from scipy.spatial.distance import cdist
 """
 The script starts by importing the time library, which is used to measure the execution time of the script.
@@ -25,7 +25,7 @@ The script prints the minimum cost divided by the square root of the number of p
 Finally, the script calculates the elapsed time of the script and prints it to the console.
 """
 
-cp.settings.TOL
+
 def create_constraints(source, target):
     """
     This function takes two lists as input and creates a matrix variable and a set of constraints.
