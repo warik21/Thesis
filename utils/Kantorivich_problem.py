@@ -25,7 +25,7 @@ The script prints the minimum cost divided by the square root of the number of p
 Finally, the script calculates the elapsed time of the script and prints it to the console.
 """
 
-cp.settings.TOL
+
 def create_constraints(source, target):
     """
     This function takes two lists as input and creates a matrix variable and a set of constraints.
