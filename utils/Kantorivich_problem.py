@@ -46,7 +46,7 @@ def create_constraints(source, target):
     p_matrix = cp.Variable((len(source), len(target)), nonneg=True)
 
     # noinspection PyTypeChecker
-    cons = [cp.sum(p_matrix, axis=0) == target,  # column sum should be what we move from the pixel the column represents
+    cons = [cp.sum(p_matrix, axis=0) == target,  # column sum should be what we move to the pixel the column represents
             cp.sum(p_matrix, axis=1) == source,  # row sum should be what we move from the pixel the row represents
             p_matrix >= 0]  # all elements of p should be non-negative
 
@@ -92,7 +92,7 @@ def calculate_costs(size: int):
     - `costs` (numpy.ndarray): A 2D array representing the matrix of costs of transporting pixels
                                 from the first image to the second image.
     """
-
+    # TODO: add an option which can use one dimension and two dimension arrays
     costs = np.zeros([size, size])
 
     m,n = int(np.sqrt(size)), int(np.sqrt(size))
@@ -145,6 +145,7 @@ def create_image(size: tuple, pixel_location: tuple):
     return img
 
 def solve_kantorovich(im1: np.ndarray, im2: np.ndarray, costs:np.ndarray):
+    # TODO: add an option which calculates costs on its own, in case costs is not passed
     im1 = im1.astype(np.float64)
     im2 = im2.astype(np.float64)
 
