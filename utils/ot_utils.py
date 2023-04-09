@@ -1,6 +1,8 @@
 import numpy as np
 import matplotlib.pyplot as plt
+import ot
 from matplotlib import gridspec
+from utils.utils import full_scalingAlg
 
 def div0(x, y):
     """
@@ -249,82 +251,23 @@ def plot2D_samples_mat(xs, xt, G, thr=1e-8, **kwargs):
                          alpha=G[i, j] / mx, **kwargs)
 
 
-def full_scalingAlg(C, Fun, p, q, eps_vec, dx, dy, n_max, verb=False, eval_rate=10):
+def full_scalingAlg_pot(source, target, costs, reg_param):
     """
-    Implementation for solving Unbalanced OT problems that includes the log-domain stabilization
+    Implementation for solving ot using sinkhorn, including log-domain stabilization
+    Also works on Unbalanced data
 
-    C: Cost matrix
-    Fun: List defining the function and its lambda parameter. e.i. Fun = ['KL', 0.01]
-    p: Source distribution
-    q: target dstribution
-    eps_vec: epsilon parameter (If scalar, the same epsilons is used throughout the algorithm.
-        If it is a vector, the epsilons are equally distributed along the iterations forcing an absorption
-        at each epsilon change.)
-    dx: discretizaiton vector in x / np.shape(dx) = (nJ,1)
-    dy: discretization vector in y / np.shape(dy) = (nJ,1)
-    n_max: Max number of iterations
+    source(np.ndarray): The source distribution, p
+    target(np.ndarray): The target distribution, q
+    costs(np.ndarray): The cost matrix
+    reg_param(float): Regularization parameter, epsilon in the literature
     """
+    K_t : np.ndarray = np.exp(costs / (-reg_param))
+    Transport_cost, logs = ot.sinkhorn(source, target, costs, reg=reg_param, log=True)
+    u : np.ndarray = logs['u'].flatten()
+    v : np.ndarray = logs['v'].flatten()
+    Transport_plan : np.ndarray = np.diag(u) @ K_t @ np.diag(v)
 
-    # Initialization
-    nI = C.shape[0]
-    nJ = C.shape[1]
-    a_t = np.ones([nI, 1])
-    u_t = np.zeros([nI, 1])
-    b_t = np.ones([nJ, 1])
-    v_t = np.zeros([nJ, 1])
-    F = Fun[0]
-    lda = Fun[1]  # define lambda parameter value
-    eps_ind = 0  # index for the chosen epsilons
-    eval_rate = eval_rate
-    n_evals = np.floor(n_max / eval_rate).astype(int)
-
-    if np.isscalar(eps_vec):
-        eps = eps_vec
-        eps_tot = 1
-    else:
-        eps = eps_vec[eps_ind]  # select the first epsilon to use
-        eps_tot = len(eps_vec)
-
-    K_t = np.exp(C / (-eps))
-
-    # Main Loop
-    for it in range(n_max):  # -> Use for and cutting condition
-        params = [lda, p]
-        a_t = proxdiv(F, (K_t @ (b_t * dy)), u_t, eps, params)
-
-        params = [lda, q]
-        b_t = proxdiv(F, (K_t.T @ (a_t * dx)), v_t, eps, params)
-
-        # stabilizations
-        # print('it/n_max = %f , (eps_ind+1)/len(eps_vec) = %f'%(it/n_max , (eps_ind+1)/len(eps_vec)))
-        if np.max([abs(a_t), abs(b_t)]) > 1e50 or (it / n_max) > (eps_ind + 1) / eps_tot:  # or it == n_max-1:
-            """
-            primal = fdiv(F,R@dy,p,dx,param_p) + fdiv(F,R.T@dx,q,dy,param_p) + \
-                eps/(nI*nJ) * np.sum( mul0(R , np.log(div0(R,K_t))) - R + K_t )
-            dual = - fdiv_c(F,-eps*np.log(a_t),p,dx,param_p) - fdiv_c(F,-eps*np.log(b_t),q,dy,param_p) -\
-                eps/(nI*nJ) * np.sum(R-K_t)
-            pdgap = primal-dual
-            """
-
-            # absorb
-            u_t = u_t + eps * np.log(a_t)
-            v_t = v_t + eps * np.log(b_t)
-
-            if (it / n_max) > (eps_ind + 1) / eps_tot:
-                eps_ind += 1
-                eps = eps_vec[eps_ind]
-
-            # update K
-            K_t = np.exp((np.tile(u_t, nJ) + np.tile(v_t, nI).T - C) / eps)
-
-            a_t = np.ones([nI, 1])  # Not really needed
-            b_t = np.ones([nJ, 1])
-            print('it = %d , eps = %f' % (it, eps))
-
-    R = (np.tile(a_t, nJ) * K_t) * np.tile(b_t, nI).T  #  Reconstruct map
-
-    return R, a_t, b_t
-
+    return Transport_plan, u, v
 
 def signed_GWD(C, Fun, p, q, eps_vec, dx, dy, n_max, verb=True, eval_rate=10):
     p_pos = np.zeros(p.shape)

@@ -322,10 +322,10 @@ def full_scalingAlg(C, Fun, p, q, eps_vec, dx, dy, n_max, verb=False, eval_rate=
         # print('it/n_max = %f , (eps_ind+1)/len(eps_vec) = %f'%(it/n_max , (eps_ind+1)/len(eps_vec)))
         if np.max([abs(a_t), abs(b_t)]) > 1e50 or (it / n_max) > (eps_ind + 1) / eps_tot:  # or it == n_max-1:
             """
-            primal = fdiv(F,R@dy,p,dx,param_p) + fdiv(F,R.T@dx,q,dy,param_p) + \
-                eps/(nI*nJ) * np.sum( mul0(R , np.log(div0(R,K_t))) - R + K_t )
+            primal = fdiv(F,Transport_plan@dy,p,dx,param_p) + fdiv(F,Transport_plan.T@dx,q,dy,param_p) + \
+                eps/(nI*nJ) * np.sum( mul0(Transport_plan , np.log(div0(Transport_plan,K_t))) - Transport_plan + K_t )
             dual = - fdiv_c(F,-eps*np.log(a_t),p,dx,param_p) - fdiv_c(F,-eps*np.log(b_t),q,dy,param_p) -\
-                eps/(nI*nJ) * np.sum(R-K_t)
+                eps/(nI*nJ) * np.sum(Transport_plan-K_t)
             pdgap = primal-dual
             """
 
