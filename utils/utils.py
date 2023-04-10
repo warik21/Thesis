@@ -16,6 +16,15 @@ def mul0(x, y):
     return np.multiply(x, y, out=np.zeros_like(x), where=~np.isinf(y))
 
 
+def normalize_array(x: np.ndarray):
+    """
+    normalizes an array to have a sum of one
+    x: np.ndarray: the array
+    """
+    x = x/x.sum()
+    return x
+
+
 def proxdiv(F, s, u, eps, params):
     """
     Proxdiv operator of the divergence function F

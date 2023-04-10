@@ -251,7 +251,7 @@ def plot2D_samples_mat(xs, xt, G, thr=1e-8, **kwargs):
                          alpha=G[i, j] / mx, **kwargs)
 
 
-def full_scalingAlg_pot(source, target, costs, reg_param):
+def full_scalingAlg_pot(source, target, costs, reg_param=1.e-2):
     """
     Implementation for solving ot using sinkhorn, including log-domain stabilization
     Also works on Unbalanced data

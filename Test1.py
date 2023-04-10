@@ -3,9 +3,6 @@
 # - Basic test on the balanced and unbalanced case using the algorithm with log-stabilization
 # - The KL constraints are used
 
-import numpy as np
-import matplotlib.pyplot as plt
-import ot
 from utils.utils import *
 from utils.ot_utils import full_scalingAlg_pot
 
@@ -13,17 +10,10 @@ n_p = 100
 n_q = 100
 n_max = 10000
 eps = 1.e-2
-eps_vec = np.logspace(-1.,-6.,100)
-Fun = ['KL', 1.e1]
 X,Y = np.linspace(0,1,n_p), np.linspace(0,1,n_q)
 
-#p = [1.0, 2.0]
-#q = [2.0, 1.0]
 p = make_1D_gauss(n_p, np.floor(3*n_p/4.), 1.)*1 + make_1D_gauss(n_p, np.floor(1*n_p/8.), 2.)*0.5
 q = make_1D_gauss(n_q, np.floor(7*n_q/8.), 2.)*1
-
-#p = p/np.sum(p)
-#q = q/np.sum(q)
 
 dx = np.ones([n_p,1])/n_p
 dy = np.ones([n_q,1])/n_q
@@ -35,15 +25,14 @@ dist_f1 = lambda a,b : abs(a-b)
 dist_fcos = lambda a,b : -2*np.log(np.cos(np.pi*0.5*np.minimum(1.,np.abs(a-b)/.2)))
 #dist_fcos = lambda a,b : np.minimum(1.,np.abs(a-b)/.2)
 
+# Calculate the cost matrix, this is inefficient for large items.
 for it1 in range(n_p):
     for it2 in range(n_q):
         C[it1,it2] = dist_f1(X[it1],Y[it2])
 
-
+# Calculate the transport plan
 Transport_plan, u, v = full_scalingAlg_pot(p, q, C, eps)
-#TODO: Understand how I check whether P is valid
-# Supposedly, the sum should be the same as the sum of the source
-# distribution, p, and we can perform an easy check for it.
+
 
 # Plots
 # Plot target and source distributions
