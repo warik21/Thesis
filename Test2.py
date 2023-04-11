@@ -1,10 +1,12 @@
+import matplotlib.pyplot as plt
+
 from utils.utils import *
 from utils.ot_utils import full_scalingAlg_pot
 
 n_p = 100
 n_q = 100
 n_max = 100000
-eps = 1.e-3
+eps = 1.e-2
 eps_vec = np.logspace(-1.,-4.,10)
 lda = 1.e1
 Fun = ['TV', lda]
@@ -29,7 +31,7 @@ for it1 in range(n_p):
 
 
 Transport_plan, u, v = full_scalingAlg_pot(p, q, C, eps)
-R, a_t, b_t, primals, duals, pdgaps = full_scalingAlg(C,Fun,p,q,eps_vec,dx,dy,n_max)
+# Transport_plan2, a_t, b_t, primals, duals, pdgaps = full_scalingAlg(C,Fun,p,q,eps_vec,dx,dy,n_max)
 
 print('*******************')
 print('Transport details')
@@ -49,6 +51,7 @@ plt.plot(X, p, 'b-', label='Source dist: p')
 plt.plot(Y, q, 'r-', label='Target dist: q')
 plt.legend()
 plt.title('Source and target distributions')
+plt.show()
 
 # Marginals of the transport map
 # target and source distributions
@@ -59,6 +62,7 @@ plt.plot(X, Transport_plan.T @ dx, 'k-', label='Final source dist (q): Transport
 plt.plot(Y, Transport_plan @ dy, 'g-', label='Final target dist (p): Transport_plan dy')
 plt.legend()
 plt.title('Marginals of the transport map Vs target and source distributions')
+plt.show()
 
 # not transported mass
 # Positive value means mass that is left over.
@@ -70,11 +74,14 @@ plt.plot(X, p - Transport_plan @ dy, 'g-', label='NTM from source (p)')
 plt.plot(Y, Transport_plan.T @ dx - q, 'k-', label='NTM from target (q)')
 plt.legend()
 plt.title('Not Transported Mass (NTM)')
+plt.show()
 
 # Plot transport plan with its marginals
 plt.figure(figsize=(8, 8))
 plot1D_mat(Transport_plan @ dy, Transport_plan.T @ dx, Transport_plan, 'Transport matrix Transport_plan with its marginals')
+plt.show()
 
 # Plot transport plan with its marginals
 plt.figure(figsize=(8, 8))
 plot1D_mat(p, q, Transport_plan, 'Transport matrix Transport_plan with the target and source dist')
+plt.show()

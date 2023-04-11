@@ -4,7 +4,7 @@
 # - The KL constraints are used
 
 from utils.utils import *
-from utils.ot_utils import full_scalingAlg_pot
+from utils.ot_utils import full_scalingAlg_pot, full_scalingAlg_ott
 
 n_p = 100
 n_q = 100
@@ -24,15 +24,19 @@ dist_f2 = lambda a,b : (a-b)**2
 dist_f1 = lambda a,b : abs(a-b)
 dist_fcos = lambda a,b : -2*np.log(np.cos(np.pi*0.5*np.minimum(1.,np.abs(a-b)/.2)))
 #dist_fcos = lambda a,b : np.minimum(1.,np.abs(a-b)/.2)
+eps_vec = np.logspace(-1.,-6.,10)
+Fun = ['KL', 1.e1]
 
 # Calculate the cost matrix, this is inefficient for large items.
 for it1 in range(n_p):
     for it2 in range(n_q):
         C[it1,it2] = dist_f1(X[it1],Y[it2])
 
+# p = p/np.sum(p)
+# q = q/np.sum(q)
+
 # Calculate the transport plan
 Transport_plan, u, v = full_scalingAlg_pot(p, q, C, eps)
-
 
 # Plots
 # Plot target and source distributions
@@ -56,10 +60,10 @@ plt.show()
 
 # Plot transport plan with its marginals
 plt.figure( figsize=(8, 8))
-plot1D_mat(Transport_plan.T @ dx, Transport_plan @ dy, Transport_plan.T, 'Transport matrix Transport_plan with its marginals')
+plot1D_mat(Transport_plan.T @ dx, Transport_plan @ dy, Transport_plan.T, 'Transport matrix with its marginals')
 plt.show()
 
 # Plot transport plan with its marginals
 plt.figure( figsize=(8, 8))
-plot1D_mat(p, q, Transport_plan, 'Transport matrix Transport_plan with the target and source dist')
+plot1D_mat(p, q, Transport_plan, 'Transport matrix with the target and source dist')
 plt.show()

@@ -1,6 +1,10 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import ot
+import ott
+from ott.geometry import pointcloud
+from ott.problems.linear import linear_problem
+from ott.solvers.linear import sinkhorn
 from matplotlib import gridspec
 from utils.utils import full_scalingAlg
 
@@ -251,7 +255,7 @@ def plot2D_samples_mat(xs, xt, G, thr=1e-8, **kwargs):
                          alpha=G[i, j] / mx, **kwargs)
 
 
-def full_scalingAlg_pot(source, target, costs, reg_param=1.e-2):
+def full_scalingAlg_pot(source, target, costs, reg_param=1.e-1):
     """
     Implementation for solving ot using sinkhorn, including log-domain stabilization
     Also works on Unbalanced data
@@ -263,11 +267,35 @@ def full_scalingAlg_pot(source, target, costs, reg_param=1.e-2):
     """
     K_t : np.ndarray = np.exp(costs / (-reg_param))
     Transport_cost, logs = ot.sinkhorn(source, target, costs, reg=reg_param, log=True)
+    #Transport_cost, logs = ot.bregman.sinkhorn_stabilized(source.flatten(), target.flatten(), costs, reg=reg_param, log=True)
     u : np.ndarray = logs['u'].flatten()
     v : np.ndarray = logs['v'].flatten()
     Transport_plan : np.ndarray = np.diag(u) @ K_t @ np.diag(v)
 
     return Transport_plan, u, v
+
+def full_scalingAlg_ott(source, target, costs, reg_param=1.e-2):
+    """
+    Not working yet
+
+    source(np.ndarray): The source distribution, p
+    target(np.ndarray): The target distribution, q
+    costs(np.ndarray): The cost matrix
+    reg_param(float): Regularization parameter, epsilon in the literature
+    """
+    source = source.flatten()
+    target = target.flatten()
+    geom = pointcloud.PointCloud(source, target, epsilon=reg_param)
+    prob = linear_problem.LinearProblem(geom, a=source, b=target)
+
+    solver = sinkhorn.Sinkhorn(threshold=1e-9, max_iterations=1000, lse_mode=True)
+
+    out = solver(prob)
+
+
+    print('hello world')
+
+    return out.matrix
 
 def signed_GWD(C, Fun, p, q, eps_vec, dx, dy, n_max, verb=True, eval_rate=10):
     p_pos = np.zeros(p.shape)
