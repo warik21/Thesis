@@ -274,6 +274,26 @@ def full_scalingAlg_pot(source, target, costs, reg_param=1.e-1):
 
     return Transport_plan, u, v
 
+
+def signed_GWD_pot(p, q, C, eps):
+    p_pos = np.zeros(p.shape)
+    p_neg = np.zeros(p.shape)
+    q_pos = np.zeros(q.shape)
+    q_neg = np.zeros(q.shape)
+
+    sign_p = np.sign(p)
+    sign_q = np.sign(q)
+
+    p_pos[sign_p > 0] = p[sign_p > 0]
+    p_neg[sign_p < 0] = -p[sign_p < 0]
+    q_pos[sign_q > 0] = q[sign_q > 0]
+    q_neg[sign_q < 0] = -q[sign_q < 0]
+
+    p_tilde = p_pos + q_neg
+    q_tilde = q_pos + p_neg
+
+    return full_scalingAlg_pot(p_tilde, q_tilde, C, eps)
+
 def full_scalingAlg_ott(source, target, costs, reg_param=1.e-2):
     """
     Not working yet
@@ -296,22 +316,3 @@ def full_scalingAlg_ott(source, target, costs, reg_param=1.e-2):
     print('hello world')
 
     return out.matrix
-
-def signed_GWD(C, Fun, p, q, eps_vec, dx, dy, n_max, verb=True, eval_rate=10):
-    p_pos = np.zeros(p.shape)
-    p_neg = np.zeros(p.shape)
-    q_pos = np.zeros(q.shape)
-    q_neg = np.zeros(q.shape)
-
-    sign_p = np.sign(p)
-    sign_q = np.sign(q)
-
-    p_pos[sign_p > 0] = p[sign_p > 0]
-    p_neg[sign_p < 0] = -p[sign_p < 0]
-    q_pos[sign_q > 0] = q[sign_q > 0]
-    q_neg[sign_q < 0] = -q[sign_q < 0]
-
-    p_tilde = p_pos + q_neg
-    q_tilde = q_pos + p_neg
-
-    return full_scalingAlg(C, Fun, p_tilde, q_tilde, eps_vec, dx, dy, n_max, verb, eval_rate)
