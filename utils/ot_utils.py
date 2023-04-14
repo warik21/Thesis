@@ -7,6 +7,7 @@ from ott.problems.linear import linear_problem
 from ott.solvers.linear import sinkhorn
 from matplotlib import gridspec
 from utils.utils import full_scalingAlg
+from scipy.special import logsumexp
 
 def div0(x, y):
     """
@@ -316,3 +317,55 @@ def full_scalingAlg_ott(source, target, costs, reg_param=1.e-2):
     print('hello world')
 
     return out.matrix
+
+
+def unbalanced_sinkhorn(alpha : np.ndarray, beta : np.ndarray, costs : np.ndarray, eps = 1.e-1, max_iter = 1000):
+    """
+    For more information about the math, see the paper: https://arxiv.org/pdf/2211.08775.pdf
+    Unbalanced Sinkhorn algorithm for solving unbalanced OT problems. outputs vectors f_i and g_j,
+    equal to the optimal transport potentials of the UOT(alpha, beta) problem.
+    :param alpha: source distribution and weights, alpha = sum(alpha_i * delta_x_i, i = 1...n)
+    :param beta: target distribution and weights, beta = sum(beta_i * delta_y_i, i = 1...m)
+    :param costs: cost matrix, C_ij = c(x_i, y_j) in R^{n x m}
+    :param eps: regularization parameter
+    :param max_iter: maximum number of iterations
+    dimensions:
+    alpha_i in R^n
+    beta_j in R^m
+    x_i in R^{N x d}
+    y_j in R^{M x d}
+    :return: transport plan, f_i, g_j
+    """
+    f = np.zeros(beta.shape)
+    g = np.zeros(alpha.shape)
+    iters = 0
+
+    while iters < max_iter:
+        g = -eps * logsumexp(np.log(alpha) + (f - costs) / eps, axis=1)
+        g = approx_phi('KL', eps, -g)
+        f = -eps * logsumexp(np.log(beta) + (g - costs) / eps, axis=0)
+        f = approx_phi('KL', eps, -f)
+        iters += 1
+
+    return f, g
+
+
+def approx_phi(divergence : str, eps : float, p : np.ndarray, ro : float = 0.5):
+
+    if divergence == 'Balanced':
+        return p
+
+    if divergence == 'KL':
+        temp = 1 + (eps / ro)
+        return p / temp
+
+    if divergence == 'TV':
+        if p < ro:
+            return -ro
+        elif p > -ro & p< ro:
+            return p
+        else:
+            return ro
+
+    else:
+        raise ValueError('Divergence not supported')

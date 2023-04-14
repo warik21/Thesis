@@ -1,10 +1,12 @@
 import jax.numpy as jnp
+import numpy as np
 
 from ott.geometry import pointcloud
 from ott.problems.linear import linear_problem
 from ott.solvers.linear import sinkhorn
 from utils.Kantorivich_problem import *
-
+from utils.utils import *
+from utils.ot_utils import *
 
 def im2mat(img):
     """Converts an image to matrix (one pixel per line)"""
@@ -39,43 +41,62 @@ def solve_ot(a, b, x, y, ep, threshold):
 
     return f, g, reg_ot
 
-# source = cv2.imread(r'C:\Users\eriki\Documents\school\Thesis\Optimal_transport_playground\IMG_2005.jpg')
-# target = cv2.imread(r'C:\Users\eriki\Documents\school\Thesis\Optimal_transport_playground\20220819_181050.jpg')
-source = cv2.imread(r'C:\Users\eriki\Documents\school\Thesis\Optimal_transport_playground\mnist_image_1.jpg', cv2.IMREAD_GRAYSCALE)
-# target = cv2.imread(r'C:\Users\eriki\Documents\school\Thesis\Optimal_transport_playground\image_left.jpg')
-target = image_2_pixels_left(source)
-# source = cv2.rotate(source, cv2.ROTATE_90_CLOCKWISE)
+n_p = 100
+n_q = 100
+n_max = 10000
+eps = 1.e-2
+dx = np.ones(n_p)/n_p
+dy = np.ones(n_q)/n_q
+eps_vec = np.logspace(-1.,-6.,10)
+Fun = 'KL'
+X,Y = np.linspace(0,1,n_p), np.linspace(0,1,n_q)
 
-# source = cv2.cvtColor(source, cv2.COLOR_RGB2GRAY)
-# target = cv2.cvtColor(target, cv2.COLOR_RGB2GRAY)
+alpha =  make_1D_gauss(n_p, np.floor(3*n_p/4.), 1.)*1 + make_1D_gauss(n_p, np.floor(1*n_p/8.), 2.)*0.5
+beta =  make_1D_gauss(n_q, np.floor(7*n_q/8.), 2.)*1
 
-costs, source_im_1d, target_im_1d = calculate_costs(source, target)
+C = np.zeros([n_p,n_q],dtype=np.float64)
+dist_f2 = lambda a,b : (a-b)**2
+# Calculate the cost matrix, this is inefficient for large items.
+for it1 in range(n_p):
+    for it2 in range(n_q):
+        C[it1,it2] = dist_f2(X[it1],Y[it2])
 
-min_cost, transport_matrix = solve_transport(source_im_1d, target_im_1d, costs)
+f, g = unbalanced_sinkhorn(alpha, beta, C, eps)
 
-# Create histograms for the images
-hist1, _ = np.histogram(source, bins=256, range=(0, 1))
-hist2, _ = np.histogram(target, bins=256, range=(0, 1))
+# Compute the OT matrix
+pi = np.zeros([n_p,n_q],dtype=np.float64)
+for i in range(n_p):
+    for j in range(n_q):
+        pi[i,j] = np.exp((f[i]+g[j]-C[i,j])/eps) * alpha[i] * beta[j]
 
-# Reshape the histograms to 2D arrays
-hist1 = hist1.reshape(-1, 1)
-hist2 = hist2.reshape(-1, 1)
+Transport_plan = pi/np.sum(pi)
 
-# Normalize the histograms
-hist1 = hist1 / np.sum(hist1)
-hist2 = hist2 / np.sum(hist2)
+# Plots
+# Plot target and source distributions
+plt.figure( figsize=(10, 4))
+plt.plot(X,alpha, 'b-', label='Source distribution')
+plt.plot(Y,beta, 'r-', label='Target distribution')
+plt.legend()
+plt.title('Source and target distributions')
+plt.show()
 
-# Define the cost matrix
-cost_matrix = ot.dist(hist1, hist2, metric='euclidean')
+# Direct output transport plan
+# Plot results
+plt.figure( figsize=(10, 4))
+plt.plot(X,alpha, 'b-.', label='Source distribution')
+plt.plot(Y,beta, 'r-.', label='Target distribution')
+plt.plot(X, Transport_plan.T @ dx, 'k-', label='Final dist: Transport_plan.T dx')
+plt.plot(Y, Transport_plan @ dy, 'g-', label='Final dist: Transport_plan dy')
+plt.legend()
+plt.title('Source and target distributions')
+plt.show()
 
-# Compute the regularized OT distance
-ot_distance = ot.emd2(hist1, hist2, cost_matrix)
+# Plot transport plan with its marginals
+plt.figure( figsize=(8, 8))
+plot1D_mat(Transport_plan.T @ dx, Transport_plan @ dy, Transport_plan.T, 'Transport matrix with its marginals')
+plt.show()
 
-# Print the OT distance
-print("OT distance: {}".format(ot_distance))
-##Calculate the distance between the images:
-
-
-# solve_ott = jax.jit(solve_ott, backend='gpu')
-# out = solve_ott(X1, X2)
-# print('blabla')
+# Plot transport plan with its marginals
+plt.figure( figsize=(8, 8))
+plot1D_mat(alpha, beta, Transport_plan, 'Transport matrix with the target and source dist')
+plt.show()
