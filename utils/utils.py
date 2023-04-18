@@ -1,6 +1,12 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib import gridspec
+from ott.geometry import pointcloud
+from ott.problems.linear import linear_problem
+from ott.solvers.linear import sinkhorn
+import ot
+import jax.numpy as jnp
+from scipy.special import logsumexp
 
 def div0(x, y):
     """
@@ -181,6 +187,40 @@ def make_1D_gauss(n, m, s):
     h = np.exp(-(x - m) ** 2 / (2 * s ** 2))
     h = h / h.sum()
     return np.reshape(h, (len(h), 1))
+
+
+def im2mat(img):
+    """Converts an image to matrix (one pixel per line)"""
+    return img.reshape((img.shape[0] * img.shape[1], img.shape[2]))
+
+def mat2im(X, shape):
+    """Converts back a matrix to an image"""
+    return X.reshape(shape)
+
+def minmax(img):
+    return np.clip(img, 0, 1)
+
+def solve_ott(x, y):
+    geom = pointcloud.PointCloud(x, y, epsilon=1e-1)
+    prob = linear_problem.LinearProblem(geom)
+
+    solver = sinkhorn.Sinkhorn(threshold=1e-2, lse_mode=True, max_iterations=1000)
+    out = solver(prob)
+
+    f, g = out.f, out.g
+    f, g = f - np.mean(f), g + np.mean(f)  # center variables, useful if one wants to compare them
+    reg_ot = jnp.where(out.converged, jnp.sum(f) + jnp.sum(g), jnp.nan)
+    return f, g, reg_ot
+
+def solve_ot(a, b, x, y, ep, threshold):
+    _, log = ot.sinkhorn(a, b, ot.dist(x, y), ep,
+                         stopThr=threshold, method="sinkhorn_stabilized", log=True, numItermax=1000)
+
+    f, g = ep * log["logu"], ep * log["logv"]
+    f, g = f - np.mean(f), g + np.mean(f)  # center variables, useful if one wants to compare them
+    reg_ot = (np.sum(f * a) + np.sum(g * b) if log["err"][-1] < threshold else np.nan)
+
+    return f, g, reg_ot
 
 
 def plot1D_mat(a, b, M, title=''):
@@ -376,3 +416,136 @@ def signed_GWD(C, Fun, p, q, eps_vec, dx, dy, n_max, verb=True, eval_rate=10):
     q_tilde = q_pos + p_neg
 
     return full_scalingAlg(C, Fun, p_tilde, q_tilde, eps_vec, dx, dy, n_max, verb, eval_rate)
+
+
+def full_scalingAlg_pot(source, target, costs, reg_param=1.e-1):
+    """
+    Implementation for solving ot using sinkhorn, including log-domain stabilization
+    Also works on Unbalanced data
+
+    source(np.ndarray): The source distribution, p
+    target(np.ndarray): The target distribution, q
+    costs(np.ndarray): The cost matrix
+    reg_param(float): Regularization parameter, epsilon in the literature
+    """
+    K_t : np.ndarray = np.exp(costs / (-reg_param))
+    Transport_cost, logs = ot.sinkhorn(source, target, costs, reg=reg_param, log=True)
+    #Transport_cost, logs = ot.bregman.sinkhorn_stabilized(source.flatten(), target.flatten(), costs, reg=reg_param, log=True)
+    u : np.ndarray = logs['u'].flatten()
+    v : np.ndarray = logs['v'].flatten()
+    Transport_plan : np.ndarray = np.diag(u) @ K_t @ np.diag(v)
+
+    return Transport_plan, u, v
+
+
+def signed_GWD_pot(p, q, C, eps):
+    p_pos = np.zeros(p.shape)
+    p_neg = np.zeros(p.shape)
+    q_pos = np.zeros(q.shape)
+    q_neg = np.zeros(q.shape)
+
+    sign_p = np.sign(p)
+    sign_q = np.sign(q)
+
+    p_pos[sign_p > 0] = p[sign_p > 0]
+    p_neg[sign_p < 0] = -p[sign_p < 0]
+    q_pos[sign_q > 0] = q[sign_q > 0]
+    q_neg[sign_q < 0] = -q[sign_q < 0]
+
+    p_tilde = p_pos + q_neg
+    q_tilde = q_pos + p_neg
+
+    return full_scalingAlg_pot(p_tilde, q_tilde, C, eps)
+
+def full_scalingAlg_ott(source, target, costs, reg_param=1.e-2):
+    """
+    Not working yet
+
+    source(np.ndarray): The source distribution, p
+    target(np.ndarray): The target distribution, q
+    costs(np.ndarray): The cost matrix
+    reg_param(float): Regularization parameter, epsilon in the literature
+    """
+    source = source.flatten()
+    target = target.flatten()
+    geom = pointcloud.PointCloud(source, target, epsilon=reg_param)
+    prob = linear_problem.LinearProblem(geom, a=source, b=target)
+
+    solver = sinkhorn.Sinkhorn(threshold=1e-9, max_iterations=1000, lse_mode=True)
+
+    out = solver(prob)
+
+
+    print('hello world')
+
+    return out.matrix
+
+
+def unbalanced_sinkhorn(alpha : np.ndarray, beta : np.ndarray, costs : np.ndarray, eps = 1.e-1,
+                        max_iter = 1000, return_plan = False):
+    """
+    This is the slow way, since it does not use the matrix-vector product formulation. The upside of this approach is
+    That it is more stable.
+    TODO: implement the faster one, using these iterations
+    For more information about the math, see the paper: https://arxiv.org/pdf/2211.08775.pdf
+    Unbalanced Sinkhorn algorithm for solving unbalanced OT problems. outputs vectors f_i and g_j,
+    equal to the optimal transport potentials of the UOT(alpha, beta) problem.
+    :param alpha: source distribution and weights, alpha = sum(alpha_i * delta_x_i, i = 1...n)
+    :param beta: target distribution and weights, beta = sum(beta_i * delta_y_i, i = 1...m)
+    :param costs: cost matrix, C_ij = c(x_i, y_j) in R^{n x m}
+    :param eps: regularization parameter
+    :param max_iter: maximum number of iterations
+    :param return_plan: whether to return the transport plan
+    dimensions:
+    alpha_i in R^n
+    beta_j in R^m
+    x_i in R^{N x d}
+    y_j in R^{M x d}
+    :return: transport plan, f_i, g_j
+    """
+    if eps == 0:
+        raise ValueError('eps must be positive')
+    f = np.zeros(beta.shape).flatten()
+    g = np.zeros(alpha.shape).flatten()
+    iters = 0
+
+    while iters < max_iter:
+        for j in range(len(g)):
+            g[j] = - eps * logsumexp(np.log(alpha) + (f - costs[:,j]) / eps)
+            g[j] = approx_phi('KL', eps, -g[j])
+        for i in range(len(f)):
+            f[i] = - eps * logsumexp(np.log(beta) + (g - costs[i,:]) / eps)
+            f[i] = approx_phi('KL', eps, -f[i])
+        iters += 1
+
+    if return_plan:
+        plan = np.zeros([alpha.shape[0], beta.shape[0]], dtype=np.float64)
+        for i in range(alpha.shape[0]):
+            for j in range(beta.shape[0]):
+                plan[i, j] = np.exp((f[i] + g[j] - costs[i, j]) / eps) * alpha[i] * beta[j]
+        return f, g, plan
+
+    return f, g
+
+
+def approx_phi(divergence : str, eps : float, p : np.ndarray, ro : float = 0.5):
+
+    if divergence == 'Balanced':
+        return p
+
+    if divergence == 'KL':
+        temp = 1 + (eps / ro)
+        return p / temp
+
+    if divergence == 'TV':
+        if p < ro:
+            return -ro
+        elif p > -ro & p < ro:
+            return p
+        else:
+            return ro
+
+    else:
+        raise ValueError('Divergence not supported')
+
+

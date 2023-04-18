@@ -5,25 +5,6 @@ import time
 import ot
 # import ott
 from scipy.spatial.distance import cdist
-"""
-The script starts by importing the time library, which is used to measure the execution time of the script.
-
-The script loads an image from a specific file path and reads it in grayscale mode using cv2.imread(image_1_path, cv2.IMREAD_GRAYSCALE).
-
-The script makes a copy of the original image and adds a 2 pixel wide border to the right side of the image using cv2.copyMakeBorder(image_1, 0, 0, 2, 0, cv2.BORDER_CONSTANT, value=255).
-
-The script then removes the 2 pixel wide border from the right side of the image using slicing img_added[:, :-2].
-
-The script then writes the modified image to a new file called 'image_left.jpg' using cv2.imwrite('image_left.jpg', img_moved).
-
-The script reshape the original image and the modified image into 1-D arrays using S = image_1.reshape(-1) and T = img_moved.reshape(-1)
-
-The script calculates the transport cost between the two images using the transport_cost function, which takes three arguments: the reshaped original image (S), the reshaped modified image (T), and the cost matrix (costs). It returns the minimum cost and the transport matrix.
-
-The script prints the minimum cost divided by the square root of the number of pixels in the image, and the transport matrix.
-
-Finally, the script calculates the elapsed time of the script and prints it to the console.
-"""
 
 
 def create_constraints(source, target):

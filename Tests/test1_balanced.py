@@ -4,7 +4,7 @@
 # - The KL constraints are used
 
 from utils.utils import *
-from utils.ot_utils import full_scalingAlg_pot, full_scalingAlg_ott
+from utils.Visualizations import *
 
 n_p = 100
 n_q = 100
@@ -32,38 +32,21 @@ for it1 in range(n_p):
     for it2 in range(n_q):
         C[it1,it2] = dist_f1(X[it1],Y[it2])
 
-# p = p/np.sum(p)
-# q = q/np.sum(q)
+p = p/np.sum(p)
+q = q/np.sum(q)
 
 # Calculate the transport plan
 Transport_plan, u, v = full_scalingAlg_pot(p, q, C, eps)
 
 # Plots
 # Plot target and source distributions
-plt.figure( figsize=(10, 4))
-plt.plot(X,p, 'b-', label='Source distribution')
-plt.plot(Y,q, 'r-', label='Target distribution')
-plt.legend()
-plt.title('Source and target distributions')
-plt.show()
+plot_distribution(X, p, q, 'Source  and target distribution')
 
 # Direct output transport plan
-# Plot results
-plt.figure( figsize=(10, 4))
-plt.plot(X,p, 'b-.', label='Source distribution')
-plt.plot(Y,q, 'r-.', label='Target distribution')
-plt.plot(X, Transport_plan.T @ dx, 'k-', label='Final dist: Transport_plan.T dx')
-plt.plot(Y, Transport_plan @ dy, 'g-', label='Final dist: Transport_plan dy')
-plt.legend()
-plt.title('Source and target distributions')
-plt.show()
+plot_marginals(X, p, q, Transport_plan, 'Transport matrix with its marginals')
 
 # Plot transport plan with its marginals
-plt.figure( figsize=(8, 8))
-plot1D_mat(Transport_plan.T @ dx, Transport_plan @ dy, Transport_plan.T, 'Transport matrix with its marginals')
-plt.show()
+plot_transport_map(X, Y, p, q, Transport_plan, 'Transport matrix with its marginals')
 
 # Plot transport plan with its marginals
-plt.figure( figsize=(8, 8))
-plot1D_mat(p, q, Transport_plan, 'Transport matrix with the target and source dist')
-plt.show()
+plot_transport_map_with_marginals(X, Y, p, q, Transport_plan, 'Transport matrix with its marginals')
