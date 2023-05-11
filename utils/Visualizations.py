@@ -96,6 +96,7 @@ def plot_transport_map_with_marginals(X, Y, p, q, Transport_plan, title):
     """
     plt.figure(figsize=(8, 8))
     plot1D_mat(p, q, Transport_plan, 'Transport matrix with the target and source dist')
+    plt.colorbar()
     plt.title(title)
     plt.show()
 

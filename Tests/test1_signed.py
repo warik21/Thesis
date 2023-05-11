@@ -18,9 +18,13 @@ dy = np.ones([n_q,1])/n_q
 C = np.zeros([n_p,n_q],dtype=np.float64)
 
 dist_f1 = lambda a,b : abs(a-b)
+dist_f2 = lambda a,b : (a-b)**2
+# TODO: look at pdist1, pdist2
 for it1 in range(n_p):
     for it2 in range(n_q):
         C[it1,it2] = dist_f1(X[it1],Y[it2])
+
+# C = X - Y.T
 
 Transport_plan, u, v = full_scalingAlg_pot(p, q, C, eps)
 
@@ -53,6 +57,7 @@ else:
     print("q_neg and p_neg are different")
 
 # Plots
+plot_transport_map_with_marginals(X, Y, p, q, Transport_plan, 'Transport matrix with the source and target dist')
 
 # target and source distributions
 plot_distribution(X, p, q, 'Source and target distributions')

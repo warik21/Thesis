@@ -49,4 +49,4 @@ plot_marginals(X, p, q, Transport_plan, 'Transport matrix with its marginals')
 plot_transport_map(X, Y, p, q, Transport_plan, 'Transport matrix with its marginals')
 
 # Plot transport plan with its marginals
-plot_transport_map_with_marginals(X, Y, p, q, Transport_plan, 'Transport matrix with its marginals')
+plot_transport_map_with_marginals(X, Y, p, q, Transport_plan, '')

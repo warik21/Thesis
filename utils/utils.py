@@ -549,3 +549,89 @@ def approx_phi(divergence : str, eps : float, p : np.ndarray, ro : float = 0.5):
         raise ValueError('Divergence not supported')
 
 
+def refactor_measures(source, target, cost):
+    #TODO: Write this, and tests for it
+    """
+    This function calculates the optimal transport between two measures which have the same positive and negative mass.
+    :param source:
+    :param target:
+    :param cost:
+    :return:
+    """
+    #TODO: use gpt to change p and q names when online
+    p = source
+    q = target
+    p_pos = np.zeros(p.shape)
+    p_neg = np.zeros(p.shape)
+    q_pos = np.zeros(q.shape)
+    q_neg = np.zeros(q.shape)
+
+    sign_p = np.sign(p)
+    sign_q = np.sign(q)
+
+    p_pos[sign_p > 0] = p[sign_p > 0]
+    p_neg[sign_p < 0] = -p[sign_p < 0]
+    q_pos[sign_q > 0] = q[sign_q > 0]
+    q_neg[sign_q < 0] = -q[sign_q < 0]
+
+    p_tilde = p_pos + q_neg
+    q_tilde = q_pos + p_neg
+
+    if sum(p_tilde) == sum(q_tilde):
+        # The sum is the same, perform optimal transport for pos to neg
+        print('Same sum, checking if positive and negative part are equal')
+        if sum(p_pos) == sum(q_pos):
+            print('Both sums are the same, calculating two optimal transport plans')
+            transport_plan_pos, u_pos, v_pos = full_scalingAlg_pot(p_pos, q_pos, cost)
+            transport_plan_neg, u_neg, v_neg = full_scalingAlg_pot(p_neg, q_neg, cost)
+            #TODO: look at real cases, I think just summing up the matrices should work, maybe sum one to the
+            #TODO: transposed of the other.
+        else:
+            print('One sum is bigger, [[[unbalanced_ot?]]]')
+            if sum(p_pos) > sum(q_pos):
+                p_new = pos_to_neg_mass(p, q)  #Maybe define the sums of q_pos and p_pos and send them as a tuple
+            else:  #p_neg > q_neg
+                p_new = neg_to_pos_mass(p, q)  #Maybe the functions will be united into one which takes target distribution
+                                       #And then gives us the changed distribution
+            #TODO: a function which takes in p and returns p_pos, p_neg and p_sign
+            p_new_pos = np.zeros(p_new.shape)
+            p_new_neg = np.zeros(p_new.shape)
+
+            sign_p_new = np.sign(p_new)
+
+            p_new_pos[sign_p_new > 0] = p_new[sign_p_new > 0]
+            p_new_neg[sign_p_new < 0] = -p_new[sign_p_new < 0]
+
+            transport_plan_pos, u_pos, v_pos = full_scalingAlg_pot(p_new_pos, q_pos, cost)
+            transport_plan_neg, u_neg, v_neg = full_scalingAlg_pot(p_new_neg, q_neg, cost)
+    else:
+        # TODO: check between cases. Think whether the cases actually matter.
+        if sum(p_pos) == sum(q_pos):
+            # This means that the negatives are different
+            print('Negative parts are different, perform unbalanced on neg part')
+
+        elif sum(p_neg) == sum(q_neg):
+            # This means that the positives are different
+            print('Positive parts are different, perform unbalanced on pos part')
+
+        else:
+            # This means that both parts are different, decide what to do in this case.
+            print('Both parts are different, not sure what to do')
+
+        # Add a case where both are different, could happen if the sum is the same as well.
+    transport_plan = transport_plan_pos + transport_plan_neg.T
+    return transport_plan
+
+def pos_to_neg_mass(distib, target_mass):
+    #TODO: Write this, decide whether or not it is usefull for this function to be splitted into pos_to_neg and neg_to_pos
+    """
+    transfer the distribution from one balance of masses to another, used in case there is too much positive/negative mass
+    :param distib:
+    :param target_mass:
+    :return:
+    """
+    return distib
+
+
+def neg_to_pos_mass(distrib, target_mass):
+    return distrib
