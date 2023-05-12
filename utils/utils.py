@@ -418,7 +418,7 @@ def signed_GWD(C, Fun, p, q, eps_vec, dx, dy, n_max, verb=True, eval_rate=10):
     return full_scalingAlg(C, Fun, p_tilde, q_tilde, eps_vec, dx, dy, n_max, verb, eval_rate)
 
 
-def full_scalingAlg_pot(source, target, costs, reg_param=1.e-1):
+def calc_transport_pot_sinkhorn(source, target, costs, reg_param=1.e-1):
     """
     Implementation for solving ot using sinkhorn, including log-domain stabilization
     Also works on Unbalanced data
@@ -435,8 +435,22 @@ def full_scalingAlg_pot(source, target, costs, reg_param=1.e-1):
     v : np.ndarray = logs['v'].flatten()
     Transport_plan : np.ndarray = np.diag(u) @ K_t @ np.diag(v)
 
-    return Transport_plan, u, v
+    return Transport_plan, Transport_cost, u, v
 
+
+def calc_transport_pot_emd(source, target, costs):
+    """
+    Implementation for solving ot using emd
+    Also works on Unbalanced data
+
+    source(np.ndarray): The source distribution, p
+    target(np.ndarray): The target distribution, q
+    costs(np.ndarray): The cost matrix
+    """
+    Transport_plan = ot.emd(source.flatten(), target.flatten(), costs)
+    Transport_cost = np.sum(Transport_plan * costs)
+
+    return Transport_plan, Transport_cost
 
 def signed_GWD_pot(p, q, C, eps):
     p_pos = np.zeros(p.shape)
@@ -455,7 +469,7 @@ def signed_GWD_pot(p, q, C, eps):
     p_tilde = p_pos + q_neg
     q_tilde = q_pos + p_neg
 
-    return full_scalingAlg_pot(p_tilde, q_tilde, C, eps)
+    return calc_transport_pot_sinkhorn(p_tilde, q_tilde, C, eps)
 
 def full_scalingAlg_ott(source, target, costs, reg_param=1.e-2):
     """
@@ -549,89 +563,60 @@ def approx_phi(divergence : str, eps : float, p : np.ndarray, ro : float = 0.5):
         raise ValueError('Divergence not supported')
 
 
-def refactor_measures(source, target, cost):
-    #TODO: Write this, and tests for it
+def split_signed_measure(source: np.ndarray):
     """
-    This function calculates the optimal transport between two measures which have the same positive and negative mass.
-    :param source:
-    :param target:
-    :param cost:
-    :return:
+    This function splits the source measure into positive and negative parts.
+    :param source: distribution to split
+    :return: positive and negative part of the distribution
     """
-    #TODO: use gpt to change p and q names when online
-    p = source
-    q = target
-    p_pos = np.zeros(p.shape)
-    p_neg = np.zeros(p.shape)
-    q_pos = np.zeros(q.shape)
-    q_neg = np.zeros(q.shape)
+    source_pos: np.ndarray = np.zeros(source.shape)
+    source_neg: np.ndarray = np.zeros(source.shape)
 
-    sign_p = np.sign(p)
-    sign_q = np.sign(q)
+    source_pos[source > 0] = source[source > 0]
+    source_neg[source < 0] = -source[source < 0]
 
-    p_pos[sign_p > 0] = p[sign_p > 0]
-    p_neg[sign_p < 0] = -p[sign_p < 0]
-    q_pos[sign_q > 0] = q[sign_q > 0]
-    q_neg[sign_q < 0] = -q[sign_q < 0]
+    return source_pos, source_neg
 
-    p_tilde = p_pos + q_neg
-    q_tilde = q_pos + p_neg
-
-    if sum(p_tilde) == sum(q_tilde):
-        # The sum is the same, perform optimal transport for pos to neg
-        print('Same sum, checking if positive and negative part are equal')
-        if sum(p_pos) == sum(q_pos):
-            print('Both sums are the same, calculating two optimal transport plans')
-            transport_plan_pos, u_pos, v_pos = full_scalingAlg_pot(p_pos, q_pos, cost)
-            transport_plan_neg, u_neg, v_neg = full_scalingAlg_pot(p_neg, q_neg, cost)
-            #TODO: look at real cases, I think just summing up the matrices should work, maybe sum one to the
-            #TODO: transposed of the other.
-        else:
-            print('One sum is bigger, [[[unbalanced_ot?]]]')
-            if sum(p_pos) > sum(q_pos):
-                p_new = pos_to_neg_mass(p, q)  #Maybe define the sums of q_pos and p_pos and send them as a tuple
-            else:  #p_neg > q_neg
-                p_new = neg_to_pos_mass(p, q)  #Maybe the functions will be united into one which takes target distribution
-                                       #And then gives us the changed distribution
-            #TODO: a function which takes in p and returns p_pos, p_neg and p_sign
-            p_new_pos = np.zeros(p_new.shape)
-            p_new_neg = np.zeros(p_new.shape)
-
-            sign_p_new = np.sign(p_new)
-
-            p_new_pos[sign_p_new > 0] = p_new[sign_p_new > 0]
-            p_new_neg[sign_p_new < 0] = -p_new[sign_p_new < 0]
-
-            transport_plan_pos, u_pos, v_pos = full_scalingAlg_pot(p_new_pos, q_pos, cost)
-            transport_plan_neg, u_neg, v_neg = full_scalingAlg_pot(p_new_neg, q_neg, cost)
-    else:
-        # TODO: check between cases. Think whether the cases actually matter.
-        if sum(p_pos) == sum(q_pos):
-            # This means that the negatives are different
-            print('Negative parts are different, perform unbalanced on neg part')
-
-        elif sum(p_neg) == sum(q_neg):
-            # This means that the positives are different
-            print('Positive parts are different, perform unbalanced on pos part')
-
-        else:
-            # This means that both parts are different, decide what to do in this case.
-            print('Both parts are different, not sure what to do')
-
-        # Add a case where both are different, could happen if the sum is the same as well.
-    transport_plan = transport_plan_pos + transport_plan_neg.T
-    return transport_plan
-
-def pos_to_neg_mass(distib, target_mass):
-    #TODO: Write this, decide whether or not it is usefull for this function to be splitted into pos_to_neg and neg_to_pos
+def is_degenerate(C):
     """
-    transfer the distribution from one balance of masses to another, used in case there is too much positive/negative mass
-    :param distib:
-    :param target_mass:
-    :return:
+    Checks whether a matrix is degenerate.
+    Args:
+      C: A NumPy array.
+    Returns:
+      True if the matrix is degenerate, False otherwise.
     """
-    return distib
+    # Check the sum of the costs in each row and column.
+    for row in range(C.shape[0]):
+      if np.sum(C[row, :]) == 0:
+        return True
+    for col in range(C.shape[1]):
+      if np.sum(C[:, col]) == 0:
+        return True
 
+    # The matrix is not degenerate.
+    return False
 
-def neg_to_pos_mass(distrib, target_mass):
-    return distrib
+def is_valid_transport_plan(P, p, q, C, eps):
+    """
+    Checks whether a matrix is a valid transport plan.
+    Args:
+      P: A NumPy array.
+      p: A NumPy array.
+      q: A NumPy array.
+      C: A NumPy array.
+      eps: A float.
+    Returns:
+      True if the matrix is a valid transport plan, False otherwise.
+    """
+    # Check that the rows and columns sum to the marginals.
+    if not np.allclose(np.sum(P, axis=0), q, atol=eps):
+      return False
+    if not np.allclose(np.sum(P, axis=1), p, atol=eps):
+      return False
+
+    # Check that the matrix is a valid transport plan.
+    if not np.allclose(np.sum(P * C), np.sum(p * q), atol=eps):
+      return False
+
+    # The matrix is a valid transport plan.
+    return True

@@ -12,8 +12,9 @@ n_max = 10000
 eps = 1.e-2
 X,Y = np.linspace(0,1,n_p), np.linspace(0,1,n_q)
 
-p = make_1D_gauss(n_p, np.floor(3*n_p/4.), 1.)*1 + make_1D_gauss(n_p, np.floor(1*n_p/8.), 2.)*0.5
-q = make_1D_gauss(n_q, np.floor(7*n_q/8.), 2.)*1
+q = make_1D_gauss(n_p, np.floor(3*n_p/4.), 1.)*1\
+    # + make_1D_gauss(n_p, np.floor(1*n_p/8.), 2.)*0.5
+p = make_1D_gauss(n_q, np.floor(7*n_q/8.), 2.)*1
 
 dx = np.ones([n_p,1])/n_p
 dy = np.ones([n_q,1])/n_q
@@ -36,7 +37,7 @@ p = p/np.sum(p)
 q = q/np.sum(q)
 
 # Calculate the transport plan
-Transport_plan, u, v = full_scalingAlg_pot(p, q, C, eps)
+Transport_plan, u, v = calc_transport_pot_sinkhorn(p, q, C, eps)
 
 # Plots
 # Plot target and source distributions

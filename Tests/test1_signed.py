@@ -22,28 +22,21 @@ dist_f2 = lambda a,b : (a-b)**2
 # TODO: look at pdist1, pdist2
 for it1 in range(n_p):
     for it2 in range(n_q):
-        C[it1,it2] = dist_f1(X[it1],Y[it2])
-
-# C = X - Y.T
-
-Transport_plan, u, v = full_scalingAlg_pot(p, q, C, eps)
+        C[it1,it2] = dist_f2(X[it1],Y[it2])
 
 ## To work with the signed measures
-p_pos = np.zeros(p.shape)
-p_neg = np.zeros(p.shape)
-q_pos = np.zeros(q.shape)
-q_neg = np.zeros(q.shape)
-
-sign_p = np.sign(p)
-sign_q = np.sign(q)
-
-p_pos[sign_p>0] = p[sign_p>0]
-p_neg[sign_p<0] = -p[sign_p<0]
-q_pos[sign_q>0] = q[sign_q>0]
-q_neg[sign_q<0] = -q[sign_q<0]
+p_pos, p_neg = split_signed_measure(p)
+q_pos, q_neg = split_signed_measure(q)
 
 p_tilde = p_pos + q_neg
 q_tilde = q_pos + p_neg
+
+
+transport_plan_pos, Transport_cost_pos = calc_transport_pot_emd(p_pos, q_pos, C)
+transport_plan_neg, Transport_cost_neg = calc_transport_pot_emd(p_neg, q_neg, C)
+
+transport_plan = transport_plan_pos + transport_plan_neg
+
 
 if sum(q_neg) == sum(p_neg):
     print("q_pos and p_pos are the same")
@@ -57,26 +50,29 @@ else:
     print("q_neg and p_neg are different")
 
 # Plots
-plot_transport_map_with_marginals(X, Y, p, q, Transport_plan, 'Transport matrix with the source and target dist')
+# plot_transport_map_with_marginals(X, Y, p, q, Transport_plan, 'Transport matrix with the source and target dist')
+plot_transport_map_with_marginals(X, Y, p, q, transport_plan, 'Transport matrix with the source and target dist')
 
 # target and source distributions
-plot_distribution(X, p, q, 'Source and target distributions')
+# plot_distribution(X, p, q, 'Source and target distributions')
+plot_distribution(X, p_tilde, q_tilde, 'Source and target distributions')
 
 # Marginals of the transport map
 # target and source distributions
-plot_marginals(X, p, q, Transport_plan, 'Marginals of the transport map Vs target and source distributions')
+# plot_marginals(X, p, q, Transport_plan, 'Marginals of the transport map Vs target and source distributions')
+# plot_marginals(X, p_tilde, q_tilde, transport_plan2, 'Marginals of the transport map Vs target and source distributions')
 
 # not transported mass
 # Positive value means mass that is left over.
 # Negative values means that mass is missing.
-plot_not_transported_mass(X, Y, p, q, Transport_plan, 'Not transported mass')
-
-
-# Plot transport plan with its marginals
-plot_transport_map(X, Y, p, q, Transport_plan, 'Transport matrix with its marginals')
+# plot_not_transported_mass(X, Y, p, q, Transport_plan, 'Not transported mass')
+# plot_not_transported_mass(X, Y, p_tilde, q_tilde, Transport_plan2, 'Not transported mass')
 
 # Plot transport plan with its marginals
-plot_transport_map_with_marginals(X, Y, p, q, Transport_plan, 'Transport matrix with the source and target dist')
+#plot_transport_map(X, Y, p, q, Transport_plan, 'Transport matrix with its marginals')
+
+# Plot transport plan with its marginals
+# plot_transport_map_with_marginals(X, Y, p, q, Transport_plan, 'Transport matrix with the source and target dist')
 
 
 
