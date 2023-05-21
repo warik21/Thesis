@@ -398,26 +398,6 @@ def full_scalingAlg(C, Fun, p, q, eps_vec, dx, dy, n_max, verb=False, eval_rate=
     return R, a_t, b_t, primals, duals, pdgaps
 
 
-def signed_GWD(C, Fun, p, q, eps_vec, dx, dy, n_max, verb=True, eval_rate=10):
-    p_pos = np.zeros(p.shape)
-    p_neg = np.zeros(p.shape)
-    q_pos = np.zeros(q.shape)
-    q_neg = np.zeros(q.shape)
-
-    sign_p = np.sign(p)
-    sign_q = np.sign(q)
-
-    p_pos[sign_p > 0] = p[sign_p > 0]
-    p_neg[sign_p < 0] = -p[sign_p < 0]
-    q_pos[sign_q > 0] = q[sign_q > 0]
-    q_neg[sign_q < 0] = -q[sign_q < 0]
-
-    p_tilde = p_pos + q_neg
-    q_tilde = q_pos + p_neg
-
-    return full_scalingAlg(C, Fun, p_tilde, q_tilde, eps_vec, dx, dy, n_max, verb, eval_rate)
-
-
 def calc_transport_pot_sinkhorn(source, target, costs, reg_param=1.e-1):
     """
     Implementation for solving ot using sinkhorn, including log-domain stabilization
@@ -452,26 +432,9 @@ def calc_transport_pot_emd(source, target, costs):
 
     return Transport_plan, Transport_cost
 
-def signed_GWD_pot(p, q, C, eps):
-    p_pos = np.zeros(p.shape)
-    p_neg = np.zeros(p.shape)
-    q_pos = np.zeros(q.shape)
-    q_neg = np.zeros(q.shape)
 
-    sign_p = np.sign(p)
-    sign_q = np.sign(q)
-
-    p_pos[sign_p > 0] = p[sign_p > 0]
-    p_neg[sign_p < 0] = -p[sign_p < 0]
-    q_pos[sign_q > 0] = q[sign_q > 0]
-    q_neg[sign_q < 0] = -q[sign_q < 0]
-
-    p_tilde = p_pos + q_neg
-    q_tilde = q_pos + p_neg
-
-    return calc_transport_pot_sinkhorn(p_tilde, q_tilde, C, eps)
-
-def full_scalingAlg_ott(source, target, costs, reg_param=1.e-2):
+def calc_transport_ott_sinkhorn(source : np.ndarray, target : np.ndarray, costs : np.ndarray,
+                                reg_param : float =1.e-2):
     """
     Not working yet
 
@@ -563,7 +526,7 @@ def approx_phi(divergence : str, eps : float, p : np.ndarray, ro : float = 0.5):
         raise ValueError('Divergence not supported')
 
 
-def split_signed_measure(source: np.ndarray):
+def split_signed_measure(source: np.ndarray) -> (np.ndarray, np.ndarray):
     """
     This function splits the source measure into positive and negative parts.
     :param source: distribution to split
@@ -577,7 +540,7 @@ def split_signed_measure(source: np.ndarray):
 
     return source_pos, source_neg
 
-def is_degenerate(C):
+def is_degenerate(C: np.ndarray) -> bool:
     """
     Checks whether a matrix is degenerate.
     Args:
@@ -596,26 +559,22 @@ def is_degenerate(C):
     # The matrix is not degenerate.
     return False
 
-def is_valid_transport_plan(P, p, q, C, eps):
+def is_valid_transport_plan(Plan: np.ndarray, p: np.ndarray, q: np.ndarray, tol=1e-6) -> bool:
     """
     Checks whether a matrix is a valid transport plan.
     Args:
-      P: A NumPy array.
-      p: A NumPy array.
-      q: A NumPy array.
-      C: A NumPy array.
-      eps: A float.
+      Plan: A NumPy array. The transport plan.
+      p: A NumPy array. The source distribution, the sum of each row of Plan.
+      q: A NumPy array. The target distribution, the sum of each column of Plan.
+      C: A NumPy array. The cost matrix.
+      tol: A float. The tolerance for checking the validity of the transport
     Returns:
       True if the matrix is a valid transport plan, False otherwise.
     """
     # Check that the rows and columns sum to the marginals.
-    if not np.allclose(np.sum(P, axis=0), q, atol=eps):
+    if not np.allclose(np.sum(Plan, axis=0), q, atol=tol):  #The sum of every column, adding up to q
       return False
-    if not np.allclose(np.sum(P, axis=1), p, atol=eps):
-      return False
-
-    # Check that the matrix is a valid transport plan.
-    if not np.allclose(np.sum(P * C), np.sum(p * q), atol=eps):
+    if not np.allclose(np.sum(Plan, axis=1), p, atol=tol):  #The sum of every row, adding up to p
       return False
 
     # The matrix is a valid transport plan.

@@ -6,15 +6,17 @@
 from utils.utils import *
 from utils.Visualizations import *
 
-n_p = 100
-n_q = 100
+n_p = 4
+n_q = 4
 n_max = 10000
-eps = 1.e-2
+eps = 1.e-1
 X,Y = np.linspace(0,1,n_p), np.linspace(0,1,n_q)
 
-q = make_1D_gauss(n_p, np.floor(3*n_p/4.), 1.)*1\
-    # + make_1D_gauss(n_p, np.floor(1*n_p/8.), 2.)*0.5
-p = make_1D_gauss(n_q, np.floor(7*n_q/8.), 2.)*1
+# q = make_1D_gauss(n_p, np.floor(3*n_p/4.), 1.)*1 + make_1D_gauss(n_p, np.floor(1*n_p/8.), 2.)*0.5
+# p = make_1D_gauss(n_q, np.floor(7*n_q/8.), 2.)*1
+p = np.array([1,0,2,0])
+q = np.array([0,1,0,2])
+
 
 dx = np.ones([n_p,1])/n_p
 dy = np.ones([n_q,1])/n_q
@@ -37,7 +39,7 @@ p = p/np.sum(p)
 q = q/np.sum(q)
 
 # Calculate the transport plan
-Transport_plan, u, v = calc_transport_pot_sinkhorn(p, q, C, eps)
+Transport_plan, transport_cost, u, v = calc_transport_pot_sinkhorn(p, q, C, eps)
 
 # Plots
 # Plot target and source distributions
@@ -47,7 +49,7 @@ plot_distribution(X, p, q, 'Source  and target distribution')
 plot_marginals(X, p, q, Transport_plan, 'Transport matrix with its marginals')
 
 # Plot transport plan with its marginals
-plot_transport_map(X, Y, p, q, Transport_plan, 'Transport matrix with its marginals')
+plot_transport_map(p, q, Transport_plan, 'Transport matrix with its marginals')
 
 # Plot transport plan with its marginals
-plot_transport_map_with_marginals(X, Y, p, q, Transport_plan, '')
+plot_transport_map_with_marginals(p, q, Transport_plan, '')
