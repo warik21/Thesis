@@ -44,4 +44,10 @@ plt.figure(figsize=(10,10))
 plot1D_mat(p, q, transport_plan_pos + transport_plan_neg,'Transport map with the source and target dist for original')
 plt.show()
 
+p_new = p_pos + q_neg
+q_new = q_pos + p_neg
 
+transport_plan_new, transport_cost_new = calc_transport_pot_emd(p_new, q_new, C)
+plt.figure(figsize=(10,10))
+plot1D_mat(p_new, q_new, transport_plan_new,'Transport map with the source and target dist for new')
+plt.show()

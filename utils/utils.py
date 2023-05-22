@@ -398,7 +398,7 @@ def full_scalingAlg(C, Fun, p, q, eps_vec, dx, dy, n_max, verb=False, eval_rate=
     return R, a_t, b_t, primals, duals, pdgaps
 
 
-def calc_transport_pot_sinkhorn(source, target, costs, reg_param=1.e-1):
+def calc_transport_pot_sinkhorn(source, target, costs, reg_param=1.e-1) -> (np.ndarray, float, np.ndarray, np.ndarray):
     """
     Implementation for solving ot using sinkhorn, including log-domain stabilization
     Also works on Unbalanced data
@@ -418,7 +418,7 @@ def calc_transport_pot_sinkhorn(source, target, costs, reg_param=1.e-1):
     return Transport_plan, Transport_cost, u, v
 
 
-def calc_transport_pot_emd(source, target, costs):
+def calc_transport_pot_emd(source, target, costs) -> (np.ndarray, float):
     """
     Implementation for solving ot using emd
     Also works on Unbalanced data
@@ -459,7 +459,7 @@ def calc_transport_ott_sinkhorn(source : np.ndarray, target : np.ndarray, costs 
 
 
 def unbalanced_sinkhorn(alpha : np.ndarray, beta : np.ndarray, costs : np.ndarray, eps = 1.e-1,
-                        max_iter = 1000, return_plan = False):
+                        max_iter = 1000, return_plan = False) -> (np.ndarray, np.ndarray, np.ndarray):
     """
     This is the slow way, since it does not use the matrix-vector product formulation. The upside of this approach is
     That it is more stable.
@@ -502,7 +502,7 @@ def unbalanced_sinkhorn(alpha : np.ndarray, beta : np.ndarray, costs : np.ndarra
                 plan[i, j] = np.exp((f[i] + g[j] - costs[i, j]) / eps) * alpha[i] * beta[j]
         return f, g, plan
 
-    return f, g
+    return f, g, None
 
 
 def approx_phi(divergence : str, eps : float, p : np.ndarray, ro : float = 0.5):
