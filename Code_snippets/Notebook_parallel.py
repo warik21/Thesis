@@ -41,7 +41,7 @@ plt.show()
 
 #United:
 plt.figure(figsize=(10,10))
-plot1D_mat(p, q, transport_cost_pos + transport_cost_neg,'Transport map with the source and target dist for original')
+plot1D_mat(p, q, transport_plan_pos + transport_plan_neg,'Transport map with the source and target dist for original')
 plt.show()
 
 
