@@ -7,6 +7,7 @@ from ott.solvers.linear import sinkhorn
 import ot
 import jax.numpy as jnp
 from scipy.special import logsumexp
+import cvxpy as cp
 
 def div0(x, y):
     """
@@ -120,53 +121,6 @@ def fdiv_c(F, x, p, dx, params):
         return
 
 
-def simple_scalingAlg(C, Fun, p, q, eps, dx, dy, n_max):
-    """
-    Simple implementation for solving Unbalanced OT problems
-
-    C: Cost matrix
-    Fun: List defining the function and its lambda parameter. e.i. Fun = ['KL', 0.01]
-    p: Source distribution
-    q: target dstribution
-    eps: epsilon parameter
-    dx: discretizaiton vector in x / np.shape(dx) = (nJ,1)
-    dy: discretization vector in y / np.shape(dy) = (nJ,1)
-    n_max: Max number of iterations
-    """
-
-    # Init
-    nI = C.shape[0]
-    nJ = C.shape[1]
-    a_t = np.ones([nI, 1])
-    b_t = np.ones([nJ, 1])
-    pdgap = np.zeros([n_max, 1])
-    F = Fun[0]
-    lda = Fun[1]  # define lambda parameter value
-
-    K_t = np.exp(C / (-eps))
-
-    # Main Loop
-    for it in range(n_max):  # -> Use for and cutting condition
-        params = [lda, p]
-        a_t = proxdiv(F, (K_t @ (b_t * dy)), 0., eps, params)
-
-        params = [lda, q]
-        b_t = proxdiv(F, (K_t.T @ (a_t * dx)), 0., eps, params)
-
-        # Gap calculation
-        R = (np.tile(a_t, nJ) * K_t) * np.tile(b_t, nI).T
-        param_p = [lda]
-        primal = fdiv(F, np.dot(R, dy), p, dx, param_p) + fdiv(F, np.dot(R.T, dx), q, dy, param_p) + \
-                 eps / (nI * nJ) * np.sum(mul0(R, np.log(div0(R, K_t))) - R + K_t)
-        dual = - fdiv_c(F, -eps * np.log(a_t), p, dx, param_p) - fdiv_c(F, -eps * np.log(b_t), q, dy, param_p) - \
-               eps / (nI * nJ) * np.sum(R - K_t)
-        pdgap[it] = primal - dual
-
-    R = (np.tile(a_t, nJ) * K_t) * np.tile(b_t, nI).T
-
-    return R, pdgap, a_t, b_t
-
-
 def make_1D_gauss(n, m, s):
     """
     Return a 1D histogram for a gaussian distribution (n bins, mean m and std s)
@@ -193,9 +147,11 @@ def im2mat(img):
     """Converts an image to matrix (one pixel per line)"""
     return img.reshape((img.shape[0] * img.shape[1], img.shape[2]))
 
+
 def mat2im(X, shape):
     """Converts back a matrix to an image"""
     return X.reshape(shape)
+
 
 def minmax(img):
     return np.clip(img, 0, 1)
@@ -210,16 +166,6 @@ def solve_ott(x, y):
     f, g = out.f, out.g
     f, g = f - np.mean(f), g + np.mean(f)  # center variables, useful if one wants to compare them
     reg_ot = jnp.where(out.converged, jnp.sum(f) + jnp.sum(g), jnp.nan)
-    return f, g, reg_ot
-
-def solve_ot(a, b, x, y, ep, threshold):
-    _, log = ot.sinkhorn(a, b, ot.dist(x, y), ep,
-                         stopThr=threshold, method="sinkhorn_stabilized", log=True, numItermax=1000)
-
-    f, g = ep * log["logu"], ep * log["logv"]
-    f, g = f - np.mean(f), g + np.mean(f)  # center variables, useful if one wants to compare them
-    reg_ot = (np.sum(f * a) + np.sum(g * b) if log["err"][-1] < threshold else np.nan)
-
     return f, g, reg_ot
 
 
@@ -296,6 +242,84 @@ def plot2D_samples_mat(xs, xt, G, thr=1e-8, **kwargs):
             if G[i, j] / mx > thr:
                 plt.plot([xs[i, 0], xt[j, 0]], [xs[i, 1], xt[j, 1]],
                          alpha=G[i, j] / mx, **kwargs)
+
+
+def solve_ot(a, b, x, y, ep, threshold):
+    _, log = ot.sinkhorn(a, b, ot.dist(x, y), ep,
+                         stopThr=threshold, method="sinkhorn_stabilized", log=True, numItermax=1000)
+
+    f, g = ep * log["logu"], ep * log["logv"]
+    f, g = f - np.mean(f), g + np.mean(f)  # center variables, useful if one wants to compare them
+    reg_ot = (np.sum(f * a) + np.sum(g * b) if log["err"][-1] < threshold else np.nan)
+
+    return f, g, reg_ot
+
+
+def create_constraints(source, target):
+    """
+    This function takes two lists as input and creates a matrix variable and a set of constraints.
+
+    Parameters:
+    - source (list): A list of non-negative numbers representing the source distribution.
+    - target (list): A list of non-negative numbers representing the target distribution.
+
+    Returns:
+    - T_matrix (cvxpy.Variable): A matrix variable with shape (len(source), len(target)) representing the transport plan.
+    - cons (list): A list of cvxpy constraints.
+
+    Constraints:
+    - The sum of each column of T_matrix is equal to the corresponding element of target.
+    - The sum of each row of T_matrix is equal to the corresponding element of source.
+    - T_matrix is element-wise non-negative.
+    """
+    T_matrix = cp.Variable((len(source), len(target)), nonneg=True)
+
+    # noinspection PyTypeChecker
+    cons = [cp.sum(T_matrix, axis=0) == target,  # column sum should be what we move to the pixel the column represents
+            cp.sum(T_matrix, axis=1) == source,  # row sum should be what we move from the pixel the row represents
+            T_matrix >= 0]  # all elements of p should be non-negative
+
+    return T_matrix, cons
+
+
+def create_constraints_signed(source, target):
+    T_matrix_pos = cp.Variable((len(source), len(target)), nonneg=True)
+    T_matrix_neg = cp.Variable((len(source), len(target)), nonneg=True)
+
+    cons = [cp.sum(T_matrix_pos - T_matrix_neg, axis=0) == target,  # column sum should be what we move to the pixel the column represents
+            cp.sum(T_matrix_pos - T_matrix_neg, axis=1) == source,  # row sum should be what we move from the pixel the row represents
+            T_matrix_pos >= 0,  # all elements of p should be non-negative
+            T_matrix_neg >= 0]
+
+    return T_matrix_pos, T_matrix_neg, cons
+
+def calc_transport_cvxpy(source, target, cost_matrix):
+    """
+    This function takes two lists and a matrix as input and solves a linear transport problem.
+
+    Parameters:
+    - source (list): A list of non-negative numbers representing the source distribution.
+    - target (list): A list of non-negative numbers representing the target distribution.
+    - cost_matrix (numpy.ndarray): A matrix representing the transport cost from each source to each target.
+
+    Returns:
+    - (float, numpy.ndarray): A tuple containing the optimal transport cost and the optimal transport plan.
+
+    The linear transport problem being solved is:
+    Minimize (sum of element-wise product of transport plan and cost matrix)
+    Subject to constraints:
+    - The sum of each column of transport plan is equal to the corresponding element of target.
+    - The sum of each row of transport plan is equal to the corresponding element of source.
+    - transport plan is element-wise non-negative.
+    """
+
+    T_pos, T_neg, constraints = create_constraints_signed(source.flatten(), target.flatten())
+
+    obj = cp.Minimize(cp.sum(cp.multiply(T_pos, cost_matrix)) + cp.sum(cp.multiply(T_neg, cost_matrix)))
+    prob = cp.Problem(obj, constraints)
+    prob.solve()
+
+    return prob.value, T_pos.value - T_neg.value
 
 
 def full_scalingAlg(C, Fun, p, q, eps_vec, dx, dy, n_max, verb=False, eval_rate=10):

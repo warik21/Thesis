@@ -125,13 +125,14 @@ def create_image(size: tuple, pixel_location: tuple):
     # Return the image
     return img
 
-def solve_kantorovich(im1: np.ndarray, im2: np.ndarray, costs:np.ndarray):
+def solve_kantorovich(im1: np.ndarray, im2: np.ndarray, costs:np.ndarray, normalize_values: bool = True):
     # TODO: add an option which calculates costs on its own, in case costs is not passed
     im1 = im1.astype(np.float64)
     im2 = im2.astype(np.float64)
 
-    im1_norm = im1 / sum(sum(im1))
-    im2_norm = im2 / sum(sum(im2))
+    if normalize_values:
+        im1_norm = im1 / sum(sum(im1))
+        im2_norm = im2 / sum(sum(im2))
 
     im1_norm = im1_norm.flatten()
     im2_norm = im2_norm.flatten()
