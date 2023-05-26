@@ -288,10 +288,11 @@ def create_constraints_signed(source, target):
 
     cons = [cp.sum(T_matrix_pos - T_matrix_neg, axis=0) == target,  # column sum should be what we move to the pixel the column represents
             cp.sum(T_matrix_pos - T_matrix_neg, axis=1) == source,  # row sum should be what we move from the pixel the row represents
-            T_matrix_pos >= 0,  # all elements of p should be non-negative
+            T_matrix_pos >= 0,  # all elements of both matrices should be non-negative
             T_matrix_neg >= 0]
 
     return T_matrix_pos, T_matrix_neg, cons
+
 
 def calc_transport_cvxpy(source, target, cost_matrix):
     """
@@ -312,14 +313,15 @@ def calc_transport_cvxpy(source, target, cost_matrix):
     - The sum of each row of transport plan is equal to the corresponding element of source.
     - transport plan is element-wise non-negative.
     """
-
     T_pos, T_neg, constraints = create_constraints_signed(source.flatten(), target.flatten())
 
     obj = cp.Minimize(cp.sum(cp.multiply(T_pos, cost_matrix)) + cp.sum(cp.multiply(T_neg, cost_matrix)))
+
     prob = cp.Problem(obj, constraints)
+
     prob.solve()
 
-    return prob.value, T_pos.value - T_neg.value
+    return prob.value, T_pos.value, T_neg.value
 
 
 def full_scalingAlg(C, Fun, p, q, eps_vec, dx, dy, n_max, verb=False, eval_rate=10):

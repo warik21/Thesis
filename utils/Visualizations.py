@@ -75,12 +75,8 @@ def plot_transport_map(p, q, Transport_plan, title):
     :param title: title of the plot
     :return: None, plot the transport map
     """
-    n_p = len(p)
-    n_q = len(q)
-    dx = np.ones(n_p) / n_p
-    dy = np.ones(n_q) / n_q
     plt.figure(figsize=(8, 8))
-    plot1D_mat(Transport_plan @ dy, Transport_plan.T @ dx, Transport_plan, title)
+    plot1D_mat(p, q, Transport_plan, title)
     plt.show()
 
 def plot_transport_map_with_marginals(p, q, Transport_plan, title):
