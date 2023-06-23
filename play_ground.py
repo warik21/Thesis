@@ -10,8 +10,8 @@ from utils.utils import *
 ### Define the distributions
 n_p = 100
 n_q = 100
-alpha = make_1D_gauss(n_p, np.floor(3 * n_p / 4.), 1.) * 1 + make_1D_gauss(n_p, np.floor(1 * n_p / 8.), 2.) * 0.5
-beta = make_1D_gauss(n_q, np.floor(7 * n_q / 8.), 2.) * 1
+alpha = make_1D_gauss(n_p, np.floor(1 * n_p / 4.), 1.)
+beta = make_1D_gauss(n_q, np.floor(7 * n_q / 8.), 2.)
 dx = np.ones(n_p)/n_p
 dy = np.ones(n_q)/n_q
 n_max = 10000
@@ -28,15 +28,7 @@ for it1 in range(n_p):
     for it2 in range(n_q):
         C[it1,it2] = dist_f2(X[it1],Y[it2])
 
-f, g = unbalanced_sinkhorn(alpha, beta, C, eps)
-
-# Compute the OT matrix
-pi = np.zeros([n_p,n_q],dtype=np.float64)
-for i in range(n_p):
-    for j in range(n_q):
-        pi[i,j] = np.exp((f[i]+g[j]-C[i,j])/eps) * alpha[i] * beta[j]
-
-Transport_plan = pi/np.sum(pi)
+T = create_T(alpha.flatten(), beta.flatten(), C, 'standard')
 
 # Plots
 # Plot target and source distributions

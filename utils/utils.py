@@ -1,6 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib import gridspec
+from utils.Classes import TransportResults
 from ott.geometry import pointcloud
 from ott.problems.linear import linear_problem
 from ott.solvers.linear import sinkhorn
@@ -169,81 +170,6 @@ def solve_ott(x, y):
     return f, g, reg_ot
 
 
-def plot1D_mat(a, b, M, title=''):
-    """ Plot matrix M  with the source and target 1D distribution
-
-    Creates a subplot with the source distribution a on the left and
-    target distribution b on the tot. The matrix M is shown in between.
-
-
-    Parameters
-    ----------
-    a : np.array, shape (na,)
-        Source distribution
-    b : np.array, shape (nb,)
-        Target distribution
-    M : np.array, shape (na,nb)
-        Matrix to plot
-    title: string, optional (default='')
-    """
-    na, nb = M.shape
-
-    gs = gridspec.GridSpec(3, 3)
-
-    xa = np.arange(na)
-    xb = np.arange(nb)
-
-    ax1 = plt.subplot(gs[0, 1:])
-    plt.plot(xb, b, 'r', label='Target distribution')
-    plt.yticks(())
-    plt.title(title)
-
-    ax2 = plt.subplot(gs[1:, 0])
-    plt.plot(a, xa, 'b', label='Source distribution')
-    plt.gca().invert_xaxis()
-    plt.gca().invert_yaxis()
-    plt.xticks(())
-
-    plt.subplot(gs[1:, 1:], sharex=ax1, sharey=ax2)
-    plt.imshow(M, interpolation='nearest')
-    plt.axis('off')
-
-    plt.xlim((0, nb))
-    plt.tight_layout()
-    plt.subplots_adjust(wspace=0., hspace=0.2)
-
-
-def plot2D_samples_mat(xs, xt, G, thr=1e-8, **kwargs):
-    """ Plot matrix M  in 2D with  lines using alpha values
-
-    Plot lines between source and target 2D samples with a color
-    proportional to the value of the matrix G between samples.
-
-
-    Parameters
-    ----------
-    xs : ndarray, shape (ns,2)
-        Source samples positions
-    xt : ndarray, shape (nt,2)
-        Target samples positions
-    G : ndarray, shape (na,nb)
-        OT matrix
-    thr : float, optional
-        threshold above which the line is drawn
-    **kwargs : dict
-        paameters given to the plot functions (default color is black if
-        nothing given)
-    """
-    if ('color' not in kwargs) and ('c' not in kwargs):
-        kwargs['color'] = 'k'
-    mx = G.max()
-    for i in range(xs.shape[0]):
-        for j in range(xt.shape[0]):
-            if G[i, j] / mx > thr:
-                plt.plot([xs[i, 0], xt[j, 0]], [xs[i, 1], xt[j, 1]],
-                         alpha=G[i, j] / mx, **kwargs)
-
-
 def solve_ot(a, b, x, y, ep, threshold):
     _, log = ot.sinkhorn(a, b, ot.dist(x, y), ep,
                          stopThr=threshold, method="sinkhorn_stabilized", log=True, numItermax=1000)
@@ -282,6 +208,22 @@ def create_constraints(source, target):
     return T_matrix, cons
 
 
+def create_constraints_lifted(source, target):
+    """
+    This function takes two real measures as input and creates a matrix variable and a set of constraints. While
+    considering a lifting parameter alpha which is used to normalize the program.
+    """
+    T_matrix = cp.Variable((len(source), len(target)), nonneg=True)
+    alpha = cp.Variable(nonneg=True)  # lifting parameter
+
+    cons = [cp.sum(T_matrix, axis=0) == target + alpha,  # column sum should be what we move to the pixel the column represents
+            cp.sum(T_matrix, axis=1) == source + alpha,  # row sum should be what we move from the pixel the row represents
+            T_matrix >= 0, # all elements of the transport plan should be non-negative
+            alpha >= 0]  # alpha should be non-negative
+
+    return T_matrix, alpha, cons
+
+
 def create_constraints_signed(source, target):
     T_matrix_pos = cp.Variable((len(source), len(target)), nonneg=True)
     T_matrix_neg = cp.Variable((len(source), len(target)), nonneg=True)
@@ -294,9 +236,68 @@ def create_constraints_signed(source, target):
     return T_matrix_pos, T_matrix_neg, cons
 
 
-def calc_transport_cvxpy(source, target, cost_matrix):
+def create_T(source: np.ndarray, target: np.ndarray, cost_matrix: np.ndarray, transport_type: str):
+    """
+    This function takes a TransportResults object and updates it according to the transport type.
+
+    """
+    if transport_type == 'standard':
+        p, constraints = create_constraints(source, target)
+        obj = cp.Minimize(cp.sum(cp.multiply(p, cost_matrix)))
+        prob = cp.Problem(obj, constraints)
+        prob.solve()
+        return TransportResults(transported_mass = prob.value, transport_plan = p.value,
+                                source_distribution = source, target_distribution = target)
+
+    elif transport_type == 'lifted':
+        T, alpha, constraints = create_constraints_lifted(source.flatten(), target.flatten())
+        obj = cp.Minimize(cp.sum(cp.multiply(T, cost_matrix)))
+        prob = cp.Problem(obj, constraints)
+        prob.solve()
+        return TransportResults(transported_mass = prob.value, transport_plan = T.value, lift_parameter = alpha.value,
+                                source_distribution = source, target_distribution = target)
+
+    elif transport_type == 'signed':
+        T_pos, T_neg, constraints = create_constraints_signed(source.flatten(), target.flatten())
+        obj = cp.Minimize(cp.sum(cp.multiply(T_pos, cost_matrix)) + cp.sum(cp.multiply(T_neg, cost_matrix)))
+        prob = cp.Problem(obj, constraints)
+        prob.solve()
+        return TransportResults(transported_mass = prob.value, Pos_plan = T_pos.value, Neg_plan = T_neg.value,
+                                transport_plan = T_pos.value - T_neg.value,
+                                source_distribution = source, target_distribution = target)
+
+    else:
+        raise ValueError('Invalid transport type. Must be either "standard", "lifted" or "signed".')
+
+
+
+def calc_transport_cvxpy(source: np.ndarray, target: np.ndarray, cost_matrix: np.ndarray, transport_type: str='standard'):
     """
     This function takes two lists and a matrix as input and solves a linear transport problem.
+
+    Parameters:
+    - source (numpy.ndarray): A list of non-negative numbers representing the source distribution.
+    - target (numpy.ndarray): A list of non-negative numbers representing the target distribution.
+    - cost_matrix (numpy.ndarray): A matrix representing the transport cost from each source to each target.
+    - transport_type (str): A string representing the type of transport problem to solve. Can be either 'standard', 'lifted' or 'signed'.
+
+    Returns:
+    - (float, numpy.ndarray): A tuple containing the optimal transport cost and the optimal transport plan.
+
+    The linear transport problem being solved is:
+    Minimize (sum of element-wise product of transport plan and cost matrix)
+    Subject to constraints:
+    - The sum of each column of transport plan is equal to the corresponding element of target.
+    - The sum of each row of transport plan is equal to the corresponding element of source.
+    - transport plan is element-wise non-negative.
+    """
+    T = create_T(source, target, cost_matrix, transport_type)
+
+    return T.transport_plan, T.transported_mass
+
+def calc_lifted_transport_cvxpy(source, target, cost_matrix):
+    """
+    This function takes two real measures and a cost matrix as input to solve a linear transport problem.
 
     Parameters:
     - source (list): A list of non-negative numbers representing the source distribution.
@@ -313,15 +314,15 @@ def calc_transport_cvxpy(source, target, cost_matrix):
     - The sum of each row of transport plan is equal to the corresponding element of source.
     - transport plan is element-wise non-negative.
     """
-    T_pos, T_neg, constraints = create_constraints_signed(source.flatten(), target.flatten())
+    T, alpha, constraints = create_constraints_lifted(source, target)
 
-    obj = cp.Minimize(cp.sum(cp.multiply(T_pos, cost_matrix)) + cp.sum(cp.multiply(T_neg, cost_matrix)))
+    obj = cp.Minimize(cp.sum(cp.multiply(T, cost_matrix)))
 
     prob = cp.Problem(obj, constraints)
 
     prob.solve()
 
-    return prob.value, T_pos.value, T_neg.value
+    return prob.value, T.value
 
 
 def full_scalingAlg(C, Fun, p, q, eps_vec, dx, dy, n_max, verb=False, eval_rate=10):
