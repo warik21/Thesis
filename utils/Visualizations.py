@@ -118,7 +118,7 @@ def plot1D_mat(a, b, M, title=''):
     xb = np.arange(nb)
 
     ax1 = plt.subplot(gs[0, 1:])
-    plt.bar(xb, b, 'r', label='Target distribution')
+    plt.bar(xb, b, label='Target distribution')
     plt.yticks(())
     plt.title(title)
 
@@ -139,7 +139,7 @@ def plot1D_mat(a, b, M, title=''):
 
 
 def plot2D_samples_mat(xs, xt, G, thr=1e-8, **kwargs):
-    """ Plot matrix M  in 2D with  lines using alpha values
+    """ Plot matrix M  in 2D with  lines using p values
 
     Plot lines between source and target 2D samples with a color
     proportional to the value of the matrix G between samples.

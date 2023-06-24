@@ -10,8 +10,18 @@ from utils.utils import *
 ### Define the distributions
 n_p = 100
 n_q = 100
-alpha = make_1D_gauss(n_p, np.floor(1 * n_p / 4.), 1.)
-beta = make_1D_gauss(n_q, np.floor(7 * n_q / 8.), 2.)
+p = (make_1D_gauss(n_p, np.floor(1 * n_p / 4.), 2.) + make_1D_gauss(n_p, np.floor(2 * n_p / 4.), 2.) * (-0.5)).flatten()
+q = (make_1D_gauss(n_q, np.floor(5 * n_q / 8.), 2.) + make_1D_gauss(n_q, np.floor(7 * n_q / 8.), 2.) * (-0.5)).flatten()
+
+# p = make_1D_gauss(n_p, np.floor(1 * n_p / 4.), 2.).flatten()
+# q = make_1D_gauss(n_q, np.floor(5 * n_q / 8.), 2.).flatten()
+
+
+# n_p = 5
+# n_q = 5
+# p = np.array([1,2,1,0,0])
+# q = np.array([0,0,1,2,1])
+
 dx = np.ones(n_p)/n_p
 dy = np.ones(n_q)/n_q
 n_max = 10000
@@ -28,13 +38,14 @@ for it1 in range(n_p):
     for it2 in range(n_q):
         C[it1,it2] = dist_f2(X[it1],Y[it2])
 
-T = create_T(alpha.flatten(), beta.flatten(), C, 'standard')
+T_standard = create_T(p, q, C, 'standard')
+T_lifted = create_T(p, q, C, 'lifted')
 
 # Plots
 # Plot target and source distributions
 plt.figure( figsize=(10, 4))
-plt.plot(X,alpha, 'b-', label='Source distribution')
-plt.plot(Y,beta, 'r-', label='Target distribution')
+plt.plot(X, p, 'b-', label='Source distribution')
+plt.plot(Y, q, 'r-', label='Target distribution')
 plt.legend()
 plt.title('Source and target distributions')
 plt.show()
@@ -42,8 +53,8 @@ plt.show()
 # Direct output transport plan
 # Plot results
 plt.figure( figsize=(10, 4))
-plt.plot(X,alpha, 'b-.', label='Source distribution')
-plt.plot(Y,beta, 'r-.', label='Target distribution')
+plt.plot(X, p, 'b-.', label='Source distribution')
+plt.plot(Y, q, 'r-.', label='Target distribution')
 plt.plot(X, Transport_plan.T @ dx, 'k-', label='Final dist: Transport_plan.T dx')
 plt.plot(Y, Transport_plan @ dy, 'g-', label='Final dist: Transport_plan dy')
 plt.legend()
@@ -57,5 +68,5 @@ plt.show()
 
 # Plot transport plan with its marginals
 plt.figure( figsize=(8, 8))
-plot1D_mat(alpha, beta, Transport_plan, 'Transport matrix with the target and source dist')
+plot1D_mat(p, q, Transport_plan, 'Transport matrix with the target and source dist')
 plt.show()

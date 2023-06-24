@@ -9,11 +9,11 @@ from utils.utils import unbalanced_sinkhorn
 """
 Code Analysis:
 - The main use case of the function is to solve unbalanced optimal transport (OT) problems.
-The goal of the function is to output the transport plan, f_i and g_j, which are equal to the optimal transport potentials of the UOT(alpha, beta) problem.
+The goal of the function is to output the transport plan, f_i and g_j, which are equal to the optimal transport potentials of the UOT(p, q) problem.
 
 Inputs:
-- alpha: source distribution and weights
-- beta: target distribution and weights
+- p: source distribution and weights
+- q: target distribution and weights
 - costs: cost matrix
 - eps: regularization parameter
 - max_iter: maximum number of iterations
@@ -35,14 +35,14 @@ Outputs:
 """
 Test Plan:
 - test_valid_inputs(): tests that the function returns the expected output when valid inputs are provided. Tags: [happy path]
-- test_empty_alpha(): tests that the function raises a ValueError when alpha is empty. Tags: [edge case]
-- test_empty_beta(): tests that the function raises a ValueError when beta is empty. Tags: [edge case]
-- test_different_shapes(): tests that the function handles cases where alpha and beta have different shapes, and where costs has different shape than alpha and beta. Tags: [general behavior]
+- test_empty_alpha(): tests that the function raises a ValueError when p is empty. Tags: [edge case]
+- test_empty_beta(): tests that the function raises a ValueError when q is empty. Tags: [edge case]
+- test_different_shapes(): tests that the function handles cases where p and q have different shapes, and where costs has different shape than p and q. Tags: [general behavior]
 - test_empty_costs(): tests that the function raises a ValueError when costs is empty. Tags: [edge case]
 - test_eps_zero(): tests that the function raises a ValueError when eps is zero. Tags: [edge case]
 - test_max_iter_zero(): tests that the function raises a ValueError when max_iter is zero. Tags: [edge case]
-- test_negative_alpha(): tests that the function raises a ValueError when alpha has negative values. Tags: [edge case]
-- test_negative_beta(): tests that the function raises a ValueError when beta has negative values. Tags: [edge case]
+- test_negative_alpha(): tests that the function raises a ValueError when p has negative values. Tags: [edge case]
+- test_negative_beta(): tests that the function raises a ValueError when q has negative values. Tags: [edge case]
 - test_negative_costs(): tests that the function raises a ValueError when costs has negative values. Tags: [edge case]
 """
 

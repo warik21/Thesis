@@ -203,7 +203,7 @@ def create_constraints(source, target):
     # noinspection PyTypeChecker
     cons = [cp.sum(T_matrix, axis=0) == target,  # column sum should be what we move to the pixel the column represents
             cp.sum(T_matrix, axis=1) == source,  # row sum should be what we move from the pixel the row represents
-            T_matrix >= 0]  # all elements of p should be non-negative
+            T_matrix >= 0]  # all elements of T_matrix should be non-negative
 
     return T_matrix, cons
 
@@ -211,7 +211,7 @@ def create_constraints(source, target):
 def create_constraints_lifted(source, target):
     """
     This function takes two real measures as input and creates a matrix variable and a set of constraints. While
-    considering a lifting parameter alpha which is used to normalize the program.
+    considering a lifting parameter p which is used to normalize the program.
     """
     T_matrix = cp.Variable((len(source), len(target)), nonneg=True)
     alpha = cp.Variable(nonneg=True)  # lifting parameter
@@ -219,7 +219,8 @@ def create_constraints_lifted(source, target):
     cons = [cp.sum(T_matrix, axis=0) == target + alpha,  # column sum should be what we move to the pixel the column represents
             cp.sum(T_matrix, axis=1) == source + alpha,  # row sum should be what we move from the pixel the row represents
             T_matrix >= 0, # all elements of the transport plan should be non-negative
-            alpha >= 0]  # alpha should be non-negative
+            alpha >= 0, # alpha should be non-negative
+            alpha <= -min(source)]  # We wouldn't want to raise the source distribution above 0
 
     return T_matrix, alpha, cons
 
@@ -493,9 +494,9 @@ def unbalanced_sinkhorn(alpha : np.ndarray, beta : np.ndarray, costs : np.ndarra
     TODO: implement the faster one, using these iterations
     For more information about the math, see the paper: https://arxiv.org/pdf/2211.08775.pdf
     Unbalanced Sinkhorn algorithm for solving unbalanced OT problems. outputs vectors f_i and g_j,
-    equal to the optimal transport potentials of the UOT(alpha, beta) problem.
-    :param alpha: source distribution and weights, alpha = sum(alpha_i * delta_x_i, i = 1...n)
-    :param beta: target distribution and weights, beta = sum(beta_i * delta_y_i, i = 1...m)
+    equal to the optimal transport potentials of the UOT(p, q) problem.
+    :param alpha: source distribution and weights, p = sum(alpha_i * delta_x_i, i = 1...n)
+    :param beta: target distribution and weights, q = sum(beta_i * delta_y_i, i = 1...m)
     :param costs: cost matrix, C_ij = c(x_i, y_j) in R^{n x m}
     :param eps: regularization parameter
     :param max_iter: maximum number of iterations
