@@ -214,13 +214,13 @@ def create_constraints_lifted(source, target):
     considering a lifting parameter p which is used to normalize the program.
     """
     T_matrix = cp.Variable((len(source), len(target)), nonneg=True)
-    alpha = cp.Variable(nonneg=True)  # lifting parameter
+    # alpha = cp.Variable(nonneg=True)  # lifting parameter
+    alpha = -min(min(source),min(target)) + 1 # lifting parameter
 
     cons = [cp.sum(T_matrix, axis=0) == target + alpha,  # column sum should be what we move to the pixel the column represents
             cp.sum(T_matrix, axis=1) == source + alpha,  # row sum should be what we move from the pixel the row represents
-            T_matrix >= 0, # all elements of the transport plan should be non-negative
-            alpha >= 0, # alpha should be non-negative
-            alpha <= -min(source)]  # We wouldn't want to raise the source distribution above 0
+            cp.sum(T_matrix) <=
+            T_matrix >= 0] # all elements of the transport plan should be non-negative
 
     return T_matrix, alpha, cons
 
@@ -255,7 +255,7 @@ def create_T(source: np.ndarray, target: np.ndarray, cost_matrix: np.ndarray, tr
         obj = cp.Minimize(cp.sum(cp.multiply(T, cost_matrix)))
         prob = cp.Problem(obj, constraints)
         prob.solve()
-        return TransportResults(transported_mass = prob.value, transport_plan = T.value, lift_parameter = alpha.value,
+        return TransportResults(transported_mass = prob.value, transport_plan = T.value, lift_parameter = alpha,
                                 source_distribution = source, target_distribution = target)
 
     elif transport_type == 'signed':

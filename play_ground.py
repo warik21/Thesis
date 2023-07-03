@@ -38,7 +38,7 @@ for it1 in range(n_p):
     for it2 in range(n_q):
         C[it1,it2] = dist_f2(X[it1],Y[it2])
 
-T_standard = create_T(p, q, C, 'standard')
+#T_standard = create_T(p, q, C, 'standard')
 T_lifted = create_T(p, q, C, 'lifted')
 
 # Plots

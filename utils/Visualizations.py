@@ -1,6 +1,7 @@
 import matplotlib.pyplot as plt
 import numpy as np
 from utils.utils import *
+from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 def plot_distribution(X, p, q, title):
     """
@@ -129,11 +130,16 @@ def plot1D_mat(a, b, M, title=''):
     plt.gca().invert_yaxis()
     plt.xticks(())
 
-    plt.subplot(gs[1:, 1:], sharex=ax1, sharey=ax2)
-    plt.imshow(M, interpolation='nearest')
+    ax3 = plt.subplot(gs[1:, 1:], sharex=ax1, sharey=ax2)
+    img = plt.imshow(M, interpolation='nearest')
     plt.axis('off')
 
-    plt.xlim((0, nb))
+
+    divider = make_axes_locatable(ax3)
+    cax = divider.append_axes("right", size="5%", pad=0.05)
+
+    plt.colorbar(img, cax=cax)
+
     plt.tight_layout()
     plt.subplots_adjust(wspace=0., hspace=0.2)
 
