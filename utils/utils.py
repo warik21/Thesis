@@ -225,6 +225,21 @@ def create_constraints_lifted(source, target):
     return T_matrix, alpha, cons
 
 
+def solve_ot_dual(c, mu, nu):
+    n, m = c.shape # n and m are the dimensions of cost matrix c
+    phi = cp.Variable(n)
+    psi = cp.Variable(m)
+
+    constraints = [phi[i] + psi[j] <= c[i, j] for i in range(n) for j in range(m)]
+
+    objective = cp.Maximize(mu @ phi + nu @ psi)
+    problem = cp.Problem(objective, constraints)
+
+    problem.solve()
+
+    return phi.value, psi.value, problem.value
+
+
 def create_constraints_signed(source, target):
     T_matrix_pos = cp.Variable((len(source), len(target)), nonneg=True)
     T_matrix_neg = cp.Variable((len(source), len(target)), nonneg=True)
