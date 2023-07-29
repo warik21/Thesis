@@ -549,7 +549,7 @@ def unbalanced_sinkhorn(alpha : np.ndarray, beta : np.ndarray, costs : np.ndarra
 
 
 def approx_phi(divergence : str, eps : float, p : np.ndarray, ro : float = 0.5):
-
+    # TODO: explain the variables
     if divergence == 'Balanced':
         return p
 
@@ -622,3 +622,11 @@ def is_valid_transport_plan(Plan: np.ndarray, p: np.ndarray, q: np.ndarray, tol=
 
     # The matrix is a valid transport plan.
     return True
+
+def noise_image(im, noise_param = 1e-2):
+    """takes an image and makes it noisy"""
+    noisy_image = im
+    height, width = im.shape
+    for i in range(height):
+        for j in range(width):
+            noisy_image[i,j] += np.random.rand(noise_param)

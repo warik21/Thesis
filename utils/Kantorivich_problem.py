@@ -63,28 +63,39 @@ def solve_transport(source, target, cost_matrix):
 
 def calculate_costs(size: int):
     """
-    This function takes the size of the images, and calculates the costs of transporting
-    pixels from one position to the other. Returns a mapping of euclidean distances.
+    This function of an array or image and calculates the cost from it to itself.
 
     Parameters:
-    - `size` (int): A 2D array representing the first image.
+    - `size` (int or 2d array): representing the object on which we would like to calculate costs.
 
     Returns:
     - `costs` (numpy.ndarray): A 2D array representing the matrix of costs of transporting pixels
                                 from the first image to the second image.
     """
-    # TODO: add an option which can use one dimension and two dimension arrays
-    costs = np.zeros([size, size])
-
-    m,n = int(np.sqrt(size)), int(np.sqrt(size))
-    for i in range(m):
-        for j in range(n):
-            for k in range(m):
-                for l in range(n):
-                    location_x = (i * n) + j
-                    location_y = (k * n) + l
-                    costs[location_x, location_y] += np.sqrt((i - k) ** 2 + (j - l) ** 2)
-    return costs
+    # TODO: Make this more efficient
+    # 1D case:
+    if type(size) == int:
+        costs = np.zeros([size, size])
+        m,n = int(np.sqrt(size)), int(np.sqrt(size))
+        for i in range(m):
+            for j in range(n):
+                for k in range(m):
+                    for l in range(n):
+                        location_x = (i * n) + j
+                        location_y = (k * n) + l
+                        costs[location_x, location_y] += np.sqrt((i - k) ** 2 + (j - l) ** 2)
+        return costs
+    elif len(size) == 2:
+        costs = np.zeros(size.shape)
+        m, n = size.shape
+        for i in range(m):
+            for j in range(n):
+                for k in range(m):
+                    for l in range(n):
+                        location_x = (i * n) + j
+                        location_y = (k * n) + l
+                        costs[location_x, location_y] += np.sqrt((i - k) ** 2 + (j - l) ** 2)
+        return costs
 
 def image_2_pixels_left(im: np.ndarray):
     """

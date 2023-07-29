@@ -185,6 +185,7 @@ def plot1D_mat_bar(a, b, M, title=''):
         Matrix to plot
     title: string, optional (default='')
     """
+
     na, nb = M.shape
 
     gs = gridspec.GridSpec(3, 3)
@@ -197,7 +198,7 @@ def plot1D_mat_bar(a, b, M, title=''):
     plt.yticks(())
     plt.title(title)
 
-    #because of barh syntax, a and xa should be in reverse order.
+    # because of barh syntax, a and xa should be in reverse order.
     ax2 = plt.subplot(gs[1:, 0])
     plt.barh(xa, a, label='Source distribution')
     plt.gca().invert_xaxis()
