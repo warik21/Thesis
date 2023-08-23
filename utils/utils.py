@@ -585,8 +585,8 @@ def create_d_phi(source: np.ndarray, target: np.ndarray, ro: float) -> cp.Variab
     :param ro: TODO: explain
     :return: returns the variable d_phi as a cvxpy variable so that we could optimize on it
     """
-    first_exp = cp.sum(cp.multiply(source/target, cp.log(source/target)))
-    second_exp = cp.sum(source/target)
+    first_exp = cp.sum(cp.multiply(source / target, cp.log(source / target)))
+    second_exp = cp.sum(source / target)
     D_phi = ro * cp.sum(first_exp - second_exp + 1)
     return D_phi
 
@@ -648,9 +648,11 @@ def is_valid_transport_plan(Plan: np.ndarray, p: np.ndarray, q: np.ndarray, tol=
 
 
 def noise_image(im, noise_param=1e-2):
-    """takes an image and makes it noisy"""
+    """takes an image and adds noise to it"""
     noisy_image = im
     height, width = im.shape
     for i in range(height):
         for j in range(width):
-            noisy_image[i, j] += np.random.rand(noise_param)
+            noisy_image[i, j] += np.random.normal(0, noise_param)
+
+    return noisy_image
