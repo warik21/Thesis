@@ -1,3 +1,4 @@
+import cvxpy
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib import gridspec
@@ -9,6 +10,7 @@ import ot
 import jax.numpy as jnp
 from scipy.special import logsumexp
 import cvxpy as cp
+
 
 def div0(x, y):
     """
@@ -29,7 +31,7 @@ def normalize_array(x: np.ndarray):
     normalizes an array to have a sum of one
     x: np.ndarray: the array
     """
-    x = x/x.sum()
+    x = x / x.sum()
     return x
 
 
@@ -157,6 +159,7 @@ def mat2im(X, shape):
 def minmax(img):
     return np.clip(img, 0, 1)
 
+
 def solve_ott(x, y):
     geom = pointcloud.PointCloud(x, y, epsilon=1e-1)
     prob = linear_problem.LinearProblem(geom)
@@ -215,18 +218,20 @@ def create_constraints_lifted(source, target):
     """
     T_matrix = cp.Variable((len(source), len(target)), nonneg=True)
     # alpha = cp.Variable(nonneg=True)  # lifting parameter
-    alpha = -min(min(source),min(target)) + 1 # lifting parameter
+    alpha = -min(min(source), min(target)) + 1  # lifting parameter
 
-    cons = [cp.sum(T_matrix, axis=0) == target + alpha,  # column sum should be what we move to the pixel the column represents
-            cp.sum(T_matrix, axis=1) == source + alpha,  # row sum should be what we move from the pixel the row represents
+    cons = [cp.sum(T_matrix, axis=0) == target + alpha,
+            # column sum should be what we move to the pixel the column represents
+            cp.sum(T_matrix, axis=1) == source + alpha,
+            # row sum should be what we move from the pixel the row represents
             cp.sum(T_matrix) <=
-            T_matrix >= 0] # all elements of the transport plan should be non-negative
+            T_matrix >= 0]  # all elements of the transport plan should be non-negative
 
     return T_matrix, alpha, cons
 
 
 def solve_ot_dual(c, mu, nu):
-    n, m = c.shape # n and m are the dimensions of cost matrix c
+    n, m = c.shape  # n and m are the dimensions of cost matrix c
     phi = cp.Variable(n)
     psi = cp.Variable(m)
 
@@ -244,8 +249,10 @@ def create_constraints_signed(source, target):
     T_matrix_pos = cp.Variable((len(source), len(target)), nonneg=True)
     T_matrix_neg = cp.Variable((len(source), len(target)), nonneg=True)
 
-    cons = [cp.sum(T_matrix_pos - T_matrix_neg, axis=0) == target,  # column sum should be what we move to the pixel the column represents
-            cp.sum(T_matrix_pos - T_matrix_neg, axis=1) == source,  # row sum should be what we move from the pixel the row represents
+    cons = [cp.sum(T_matrix_pos - T_matrix_neg, axis=0) == target,
+            # column sum should be what we move to the pixel the column represents
+            cp.sum(T_matrix_pos - T_matrix_neg, axis=1) == source,
+            # row sum should be what we move from the pixel the row represents
             T_matrix_pos >= 0,  # all elements of both matrices should be non-negative
             T_matrix_neg >= 0]
 
@@ -262,32 +269,32 @@ def create_T(source: np.ndarray, target: np.ndarray, cost_matrix: np.ndarray, tr
         obj = cp.Minimize(cp.sum(cp.multiply(p, cost_matrix)))
         prob = cp.Problem(obj, constraints)
         prob.solve()
-        return TransportResults(transported_mass = prob.value, transport_plan = p.value,
-                                source_distribution = source, target_distribution = target)
+        return TransportResults(transported_mass=prob.value, transport_plan=p.value,
+                                source_distribution=source, target_distribution=target)
 
     elif transport_type == 'lifted':
         T, alpha, constraints = create_constraints_lifted(source.flatten(), target.flatten())
         obj = cp.Minimize(cp.sum(cp.multiply(T, cost_matrix)))
         prob = cp.Problem(obj, constraints)
         prob.solve()
-        return TransportResults(transported_mass = prob.value, transport_plan = T.value, lift_parameter = alpha,
-                                source_distribution = source, target_distribution = target)
+        return TransportResults(transported_mass=prob.value, transport_plan=T.value, lift_parameter=alpha,
+                                source_distribution=source, target_distribution=target)
 
     elif transport_type == 'signed':
         T_pos, T_neg, constraints = create_constraints_signed(source.flatten(), target.flatten())
         obj = cp.Minimize(cp.sum(cp.multiply(T_pos, cost_matrix)) + cp.sum(cp.multiply(T_neg, cost_matrix)))
         prob = cp.Problem(obj, constraints)
         prob.solve()
-        return TransportResults(transported_mass = prob.value, Pos_plan = T_pos.value, Neg_plan = T_neg.value,
-                                transport_plan = T_pos.value - T_neg.value,
-                                source_distribution = source, target_distribution = target)
+        return TransportResults(transported_mass=prob.value, Pos_plan=T_pos.value, Neg_plan=T_neg.value,
+                                transport_plan=T_pos.value - T_neg.value,
+                                source_distribution=source, target_distribution=target)
 
     else:
         raise ValueError('Invalid transport type. Must be either "standard", "lifted" or "signed".')
 
 
-
-def calc_transport_cvxpy(source: np.ndarray, target: np.ndarray, cost_matrix: np.ndarray, transport_type: str='standard'):
+def calc_transport_cvxpy(source: np.ndarray, target: np.ndarray, cost_matrix: np.ndarray,
+                         transport_type: str = 'standard'):
     """
     This function takes two lists and a matrix as input and solves a linear transport problem.
 
@@ -310,6 +317,7 @@ def calc_transport_cvxpy(source: np.ndarray, target: np.ndarray, cost_matrix: np
     T = create_T(source, target, cost_matrix, transport_type)
 
     return T.transport_plan, T.transported_mass
+
 
 def calc_lifted_transport_cvxpy(source, target, cost_matrix):
     """
@@ -451,12 +459,12 @@ def calc_transport_pot_sinkhorn(source, target, costs, reg_param=1.e-1) -> (np.n
     costs(np.ndarray): The cost matrix
     reg_param(float): Regularization parameter, epsilon in the literature
     """
-    K_t : np.ndarray = np.exp(costs / (-reg_param))
+    K_t: np.ndarray = np.exp(costs / (-reg_param))
     Transport_cost, logs = ot.sinkhorn(source, target, costs, reg=reg_param, log=True)
-    #Transport_cost, logs = ot.bregman.sinkhorn_stabilized(source.flatten(), target.flatten(), costs, reg=reg_param, log=True)
-    u : np.ndarray = logs['u'].flatten()
-    v : np.ndarray = logs['v'].flatten()
-    Transport_plan : np.ndarray = np.diag(u) @ K_t @ np.diag(v)
+    # Transport_cost, logs = ot.bregman.sinkhorn_stabilized(source.flatten(), target.flatten(), costs, reg=reg_param, log=True)
+    u: np.ndarray = logs['u'].flatten()
+    v: np.ndarray = logs['v'].flatten()
+    Transport_plan: np.ndarray = np.diag(u) @ K_t @ np.diag(v)
 
     return Transport_plan, Transport_cost, u, v
 
@@ -476,8 +484,8 @@ def calc_transport_pot_emd(source, target, costs) -> (np.ndarray, float):
     return Transport_plan, Transport_cost
 
 
-def calc_transport_ott_sinkhorn(source : np.ndarray, target : np.ndarray, costs : np.ndarray,
-                                reg_param : float =1.e-2):
+def calc_transport_ott_sinkhorn(source: np.ndarray, target: np.ndarray, costs: np.ndarray,
+                                reg_param: float = 1.e-2):
     """
     Not working yet
 
@@ -495,14 +503,13 @@ def calc_transport_ott_sinkhorn(source : np.ndarray, target : np.ndarray, costs 
 
     out = solver(prob)
 
-
     print('hello world')
 
     return out.matrix
 
 
-def unbalanced_sinkhorn(alpha : np.ndarray, beta : np.ndarray, costs : np.ndarray, eps = 1.e-1,
-                        max_iter = 1000, return_plan = False) -> (np.ndarray, np.ndarray, np.ndarray):
+def unbalanced_sinkhorn(alpha: np.ndarray, beta: np.ndarray, costs: np.ndarray, eps=1.e-1,
+                        max_iter=1000, return_plan=False) -> (np.ndarray, np.ndarray, np.ndarray):
     """
     This is the slow way, since it does not use the matrix-vector product formulation. The upside of this approach is
     That it is more stable.
@@ -531,10 +538,10 @@ def unbalanced_sinkhorn(alpha : np.ndarray, beta : np.ndarray, costs : np.ndarra
 
     while iters < max_iter:
         for j in range(len(g)):
-            g[j] = - eps * logsumexp(np.log(alpha) + (f - costs[:,j]) / eps)
+            g[j] = - eps * logsumexp(np.log(alpha) + (f - costs[:, j]) / eps)
             g[j] = approx_phi('KL', eps, -g[j])
         for i in range(len(f)):
-            f[i] = - eps * logsumexp(np.log(beta) + (g - costs[i,:]) / eps)
+            f[i] = - eps * logsumexp(np.log(beta) + (g - costs[i, :]) / eps)
             f[i] = approx_phi('KL', eps, -f[i])
         iters += 1
 
@@ -548,7 +555,7 @@ def unbalanced_sinkhorn(alpha : np.ndarray, beta : np.ndarray, costs : np.ndarra
     return f, g, None
 
 
-def approx_phi(divergence : str, eps : float, p : np.ndarray, ro : float = 0.5):
+def approx_phi(divergence: str, eps: float, p: np.ndarray, ro: float = 0.5):
     # TODO: explain the variables
     if divergence == 'Balanced':
         return p
@@ -560,13 +567,28 @@ def approx_phi(divergence : str, eps : float, p : np.ndarray, ro : float = 0.5):
     if divergence == 'TV':
         if p < ro:
             return -ro
-        elif p > -ro & p < ro:
+        elif -ro < p < ro:
             return p
         else:
             return ro
 
     else:
         raise ValueError('Divergence not supported')
+
+
+# noinspection PyArgumentList
+def create_d_phi(source: np.ndarray, target: np.ndarray, ro: float) -> cp.Variable:
+    """
+    Takes two probability distributions and calculates the KL divergence between them.
+    :param source: The source distribution
+    :param target: The target distribution
+    :param ro: TODO: explain
+    :return: returns the variable d_phi as a cvxpy variable so that we could optimize on it
+    """
+    first_exp = cp.sum(cp.multiply(source/target, cp.log(source/target)))
+    second_exp = cp.sum(source/target)
+    D_phi = ro * cp.sum(first_exp - second_exp + 1)
+    return D_phi
 
 
 def split_signed_measure(source: np.ndarray) -> (np.ndarray, np.ndarray):
@@ -583,6 +605,7 @@ def split_signed_measure(source: np.ndarray) -> (np.ndarray, np.ndarray):
 
     return source_pos, source_neg
 
+
 def is_degenerate(C: np.ndarray) -> bool:
     """
     Checks whether a matrix is degenerate.
@@ -593,14 +616,15 @@ def is_degenerate(C: np.ndarray) -> bool:
     """
     # Check the sum of the costs in each row and column.
     for row in range(C.shape[0]):
-      if np.sum(C[row, :]) == 0:
-        return True
+        if np.sum(C[row, :]) == 0:
+            return True
     for col in range(C.shape[1]):
-      if np.sum(C[:, col]) == 0:
-        return True
+        if np.sum(C[:, col]) == 0:
+            return True
 
     # The matrix is not degenerate.
     return False
+
 
 def is_valid_transport_plan(Plan: np.ndarray, p: np.ndarray, q: np.ndarray, tol=1e-6) -> bool:
     """
@@ -609,24 +633,24 @@ def is_valid_transport_plan(Plan: np.ndarray, p: np.ndarray, q: np.ndarray, tol=
       Plan: A NumPy array. The transport plan.
       p: A NumPy array. The source distribution, the sum of each row of Plan.
       q: A NumPy array. The target distribution, the sum of each column of Plan.
-      C: A NumPy array. The cost matrix.
       tol: A float. The tolerance for checking the validity of the transport
     Returns:
       True if the matrix is a valid transport plan, False otherwise.
     """
     # Check that the rows and columns sum to the marginals.
-    if not np.allclose(np.sum(Plan, axis=0), q, atol=tol):  #The sum of every column, adding up to q
-      return False
-    if not np.allclose(np.sum(Plan, axis=1), p, atol=tol):  #The sum of every row, adding up to p
-      return False
+    if not np.allclose(np.sum(Plan, axis=0), q, atol=tol):  # The sum of every column, adding up to q
+        return False
+    if not np.allclose(np.sum(Plan, axis=1), p, atol=tol):  # The sum of every row, adding up to p
+        return False
 
     # The matrix is a valid transport plan.
     return True
 
-def noise_image(im, noise_param = 1e-2):
+
+def noise_image(im, noise_param=1e-2):
     """takes an image and makes it noisy"""
     noisy_image = im
     height, width = im.shape
     for i in range(height):
         for j in range(width):
-            noisy_image[i,j] += np.random.rand(noise_param)
+            noisy_image[i, j] += np.random.rand(noise_param)

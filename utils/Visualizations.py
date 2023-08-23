@@ -3,6 +3,7 @@ import numpy as np
 from utils.utils import *
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
+
 def plot_distribution(X, p, q, title):
     """
     Plot the source and target distributions
@@ -19,6 +20,7 @@ def plot_distribution(X, p, q, title):
     plt.legend()
     plt.show()
 
+
 def plot_marginals(X, p, q, title):
     """
     Plot the marginals of the transport map
@@ -34,6 +36,7 @@ def plot_marginals(X, p, q, title):
     plt.title(title)
     plt.legend()
     plt.show()
+
 
 def plot_signed_marginals(X, p, q, Transport_plan, title):
     """
@@ -58,6 +61,7 @@ def plot_signed_marginals(X, p, q, Transport_plan, title):
     plt.legend()
     plt.show()
 
+
 def plot_transport_map(p, q, Transport_plan, title):
     """
     Plot the transport map
@@ -72,6 +76,7 @@ def plot_transport_map(p, q, Transport_plan, title):
     plt.figure(figsize=(8, 8))
     plot1D_mat(p, q, Transport_plan, title)
     plt.show()
+
 
 def plot_transport_map_with_marginals(p, q, Transport_plan, title):
     """
@@ -116,7 +121,7 @@ def plot1D_mat(a, b, M, title=''):
     plt.yticks(())
     plt.title(title)
 
-    #because of barh syntax, a and xa should be in reverse order.
+    # because of barh syntax, a and xa should be in reverse order.
     ax2 = plt.subplot(gs[1:, 0])
     plt.barh(xa, a, label='Source distribution')
     plt.gca().invert_xaxis()
@@ -126,7 +131,6 @@ def plot1D_mat(a, b, M, title=''):
     ax3 = plt.subplot(gs[1:, 1:], sharex=ax1, sharey=ax2)
     img = plt.imshow(M, interpolation='nearest')
     plt.axis('off')
-
 
     divider = make_axes_locatable(ax3)
     cax = divider.append_axes("right", size="5%", pad=0.05)
