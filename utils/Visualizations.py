@@ -210,7 +210,7 @@ def plot1D_mat_bar(a, b, M, title=''):
     plt.xticks(())
 
     plt.subplot(gs[1:, 1:], sharex=ax1, sharey=ax2)
-    plt.imshow(M, interpolation='nearest')
+    plt.imshow(M, interpolation='nearest', cmap='gray')
     plt.axis('off')
 
     plt.xlim((0, nb))

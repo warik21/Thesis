@@ -649,10 +649,53 @@ def is_valid_transport_plan(Plan: np.ndarray, p: np.ndarray, q: np.ndarray, tol=
 
 def noise_image(im, noise_param=1e-2):
     """takes an image and adds noise to it"""
-    noisy_image = im
+    noisy_image = np.copy(im)  # make a copy of the image, so that the original won't be changed
     height, width = im.shape
     for i in range(height):
         for j in range(width):
             noisy_image[i, j] += np.random.normal(0, noise_param)
 
     return noisy_image
+
+
+def calculate_costs(size):
+    """
+    This function of an array or image and calculates the cost from it to itself.
+
+    Parameters:
+    - `size` (int or tuple): representing the object on which we would like to calculate costs.
+
+    Returns:
+    - `costs` (numpy.ndarray): A 2D array representing the matrix of costs of transporting pixels
+                                from the first image to the second image.
+    """
+    # 1D case:
+    if type(size) == int:
+        # Generate an array of indices from 0 to size-1
+        indices = np.arange(size)
+
+        # Use broadcasting to calculate the absolute differences between each pair of indices
+        costs = np.abs(indices[:, np.newaxis] - indices[np.newaxis, :])
+
+        return costs
+
+    # 2D case:
+    elif len(size) == 2:
+        # Extract the dimensions from the size tuple
+        m, n = size
+        size_1d = m * n
+
+        # Generate coordinates for the grid
+        coords = np.array([[i, j] for i in range(m) for j in range(n)])
+
+        # Calculate the distance between each pair of points using broadcasting
+        delta = coords[:, np.newaxis, :] - coords[np.newaxis, :, :]
+        delta_sq = delta ** 2
+
+        # Compute the Euclidean distance by summing the squared differences and taking the square root
+        distances = np.sqrt(np.sum(delta_sq, axis=2)).flatten()
+
+        # Reshape the 1D distances into a 2D cost matrix
+        costs = distances.reshape((size_1d, size_1d))
+
+        return costs
