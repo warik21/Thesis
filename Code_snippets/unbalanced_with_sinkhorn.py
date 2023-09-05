@@ -26,10 +26,6 @@ f, g, plan = unbalanced_sinkhorn(p, q, C, eps, return_plan=True)
 
 
 # Plots
-# Plot target and source distributions
-plot_distribution(X, p, q, title='Source and target distributions')
-
-# Direct output transport plan
 # Plot results
 plot_marginals(X, p, q, plan, title='Source and target distributions')
 

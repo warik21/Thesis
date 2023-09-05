@@ -30,18 +30,18 @@ K_t : np.ndarray = np.exp(C / (-eps))
 #Positives:
 transport_plan_pos, transport_cost_pos = calc_transport_pot_emd(p_pos, q_pos, C)
 plt.figure(figsize=(10,10))
-plot1D_mat(p_pos, q_pos, transport_plan_pos,'Transport map with the source and target dist for positives')
+plot_transport_map_with_marginals(p_pos, q_pos, transport_plan_pos, 'Transport map with the source and target dist for positives')
 plt.show()
 
 #Negatives:
 transport_plan_neg, transport_cost_neg = calc_transport_pot_emd(p_neg, q_neg, C)
 plt.figure(figsize=(10,10))
-plot1D_mat(p_neg, q_neg, transport_plan_neg,'Transport map with the source and target dist for negatives')
+plot_transport_map_with_marginals(p_neg, q_neg, transport_plan_neg, 'Transport map with the source and target dist for negatives')
 plt.show()
 
 #United:
 plt.figure(figsize=(10,10))
-plot1D_mat(p, q, transport_plan_pos + transport_plan_neg,'Transport map with the source and target dist for original')
+plot_transport_map_with_marginals(p, q, transport_plan_pos + transport_plan_neg, 'Transport map with the source and target dist for original')
 plt.show()
 
 p_new = p_pos + q_neg
@@ -49,5 +49,5 @@ q_new = q_pos + p_neg
 
 transport_plan_new, transport_cost_new = calc_transport_pot_emd(p_new, q_new, C)
 plt.figure(figsize=(10,10))
-plot1D_mat(p_new, q_new, transport_plan_new,'Transport map with the source and target dist for new')
+plot_transport_map_with_marginals(p_new, q_new, transport_plan_new, 'Transport map with the source and target dist for new')
 plt.show()
