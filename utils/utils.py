@@ -591,12 +591,13 @@ def create_d_phi(source: np.ndarray, target: np.ndarray, ro: float) -> cp.Variab
     return D_phi
 
 
-def split_signed_measure(source: np.ndarray) -> (np.ndarray, np.ndarray):
+def split_signed_measure(src: np.ndarray) -> (np.ndarray, np.ndarray):
     """
     This function splits the source measure into positive and negative parts.
-    :param source: distribution to split
+    :param src: distribution to split
     :return: positive and negative part of the distribution
     """
+    source = np.copy(src)
     source_pos: np.ndarray = np.zeros(source.shape)
     source_neg: np.ndarray = np.zeros(source.shape)
 
