@@ -1,7 +1,4 @@
-import cvxpy
 import numpy as np
-import matplotlib.pyplot as plt
-from matplotlib import gridspec
 from utils.Classes import TransportResults
 from ott.geometry import pointcloud
 from ott.problems.linear import linear_problem
@@ -10,118 +7,6 @@ import ot
 import jax.numpy as jnp
 from scipy.special import logsumexp
 import cvxpy as cp
-
-
-def div0(x, y):
-    """
-    Special x/y with convention x/0=0
-    """
-    return np.divide(x, y, out=np.zeros_like(x), where=y != 0)
-
-
-def mul0(x, y):
-    """
-    Return x*y with the convention 0*Inf = 0
-    """
-    return np.multiply(x, y, out=np.zeros_like(x), where=~np.isinf(y))
-
-
-def normalize_array(x: np.ndarray):
-    """
-    normalizes an array to have a sum of one
-    x: np.ndarray: the array
-    """
-    x = x / x.sum()
-    return x
-
-
-def proxdiv(F, s, u, eps, params):
-    """
-    Proxdiv operator of the divergence function F
-
-    F: String description of the target function
-    s:
-    u:
-    eps: epsilon parameter of the entropic regularization
-    params: List of parameters of the corresponding F
-
-    F = 'KL' --> params[0] = lda ; params[1] = p
-    """
-
-    if F == 'KL':
-        lda = params[0]
-        p = params[1]
-        # return div0(p,s)**(lda/(lda+eps)) * np.exp(-u/(lda+eps))
-        return div0(p, s * np.exp(u / lda)) ** (lda / (lda + eps))
-
-    if F == 'TV':
-        lda = params[0]
-        p = params[1]
-        term1 = np.exp((- u + lda) / eps)
-        # print(u.shape)
-        # print(term1.shape)
-        # print(p.shape)
-        # print(s.shape)
-        # print((np.exp((-lda - u)/eps)).shape)
-        # print((div0(p,s)).shape)
-        term2 = np.maximum(np.exp((-lda - u) / eps), div0(p, s))
-        return np.minimum(term1, term2)
-
-    else:
-        print('Not recognized function.')
-        return
-
-
-def fdiv(F, x, p, dx, params):
-    """
-    Divergence function F
-
-    F: String description of the divergence function
-    x: Test distribution (KL_F(x|p))
-    p: Reference distribution (KL_F(x|p))
-    dx: discretization vector
-    params: List of parameters of the corresponding F
-
-    F = 'KL' --> params[0] = lda
-    """
-
-    if F == 'KL':
-        lda = params[0]
-        return lda * np.sum(mul0(dx, (mul0(x, np.log(div0(x, p))) - x + p)))
-
-    elif F == 'TV':
-        lda = params[0]
-        return lda * np.sum(mul0(dx, abs(x - p)))
-
-    else:
-        print('Not recognized function.')
-        return
-
-
-def fdiv_c(F, x, p, dx, params):
-    """
-    Convex conjugate of the divergence function F
-
-    F: String description of the divergence function
-    x: Test distribution (KL_F(x|p))
-    p: Reference distribution (KL_F(x|p))
-    dx: discretization vector
-    params: List of parameters of the corresponding F
-
-    F = 'KL' --> params[0] = lda
-    """
-
-    if F == 'KL':
-        lda = params[0]
-        return lda * np.sum(mul0(p * dx, np.exp(x / lda) - 1))
-
-    elif F == 'TV':
-        lda = params[0]
-        return lda * np.sum(mul0(dx, np.minimum(p, np.maximum(-p, mul0(p, x / lda)))))
-
-    else:
-        print('Not recognized function.')
-        return
 
 
 def make_1D_gauss(n, m, s):
@@ -349,106 +234,6 @@ def calc_lifted_transport_cvxpy(source, target, cost_matrix):
     return prob.value, T.value
 
 
-def full_scalingAlg(C, Fun, p, q, eps_vec, dx, dy, n_max, verb=False, eval_rate=10):
-    """
-    Implementation for solving Unbalanced OT problems that includes the log-domain stabilization
-
-    C: Cost matrix
-    Fun: List defining the function and its lambda parameter. e.i. Fun = ['KL', 0.01]
-    p: Source distribution
-    q: target dstribution
-    eps_vec: epsilon parameter (If scalar, the same epsilons is used throughout the algorithm.
-        If it is a vector, the epsilons are equally distributed along the iterations forcing an absorption
-        at each epsilon change.)
-    dx: discretizaiton vector in x / np.shape(dx) = (nJ,1)
-    dy: discretization vector in y / np.shape(dy) = (nJ,1)
-    n_max: Max number of iterations
-    """
-
-    # Initialization
-    nI = C.shape[0]
-    nJ = C.shape[1]
-    a_t = np.ones([nI, 1])
-    u_t = np.zeros([nI, 1])
-    b_t = np.ones([nJ, 1])
-    v_t = np.zeros([nJ, 1])
-    F = Fun[0]
-    lda = Fun[1]  # define lambda parameter value
-    eps_ind = 0  # index for the chosen epsilons
-    eval_rate = eval_rate
-    n_evals = np.floor(n_max / eval_rate).astype(int)
-    param_p = [lda]
-    primals = np.zeros((n_evals, 1))
-    duals = np.zeros((n_evals, 1))
-    pdgaps = np.zeros((n_evals, 1))
-
-    if np.isscalar(eps_vec):
-        eps = eps_vec
-        eps_tot = 1
-    else:
-        eps = eps_vec[eps_ind]  # select the first epsilon to use
-        eps_tot = len(eps_vec)
-
-    K_t = np.exp(C / (-eps))
-
-    # Main Loop
-    for it in range(n_max):  # -> Use for and cutting condition
-        params = [lda, p]
-        a_t = proxdiv(F, (K_t @ (b_t * dy)), u_t, eps, params)
-
-        params = [lda, q]
-        b_t = proxdiv(F, (K_t.T @ (a_t * dx)), v_t, eps, params)
-
-        if verb:
-            # Check the primal, dual and primal-dual gap
-            if it % eval_rate == 0:
-                it_eval = 0
-                R = (np.tile(a_t, nJ) * K_t) * np.tile(b_t, nI).T  # Reconstruct map
-                primal = fdiv(F, R @ dy, p, dx, param_p) + fdiv(F, R.T @ dx, q, dy, param_p) + \
-                         eps / (nI * nJ) * np.sum(mul0(R, np.log(div0(R, K_t))) - R + K_t)
-                dual = - fdiv_c(F, -eps * np.log(a_t), p, dx, param_p) - fdiv_c(F, -eps * np.log(b_t), q, dy, param_p) - \
-                       eps / (nI * nJ) * np.sum(R - K_t)
-                pdgap = primal - dual
-
-                # print("primal = %f \n dual = %f \n pdgap = %f \n"%(primal,dual,pdgap))
-
-                primals[it_eval] = primal
-                duals[it_eval] = dual
-                pdgaps[it_eval] = pdgap
-
-                it_eval += 1
-
-        # stabilizations
-        # print('it/n_max = %f , (eps_ind+1)/len(eps_vec) = %f'%(it/n_max , (eps_ind+1)/len(eps_vec)))
-        if np.max([abs(a_t), abs(b_t)]) > 1e50 or (it / n_max) > (eps_ind + 1) / eps_tot:  # or it == n_max-1:
-            """
-            primal = fdiv(F,Transport_plan@dy,p,dx,param_p) + fdiv(F,Transport_plan.T@dx,q,dy,param_p) + \
-                eps/(nI*nJ) * np.sum( mul0(Transport_plan , np.log(div0(Transport_plan,K_t))) - Transport_plan + K_t )
-            dual = - fdiv_c(F,-eps*np.log(a_t),p,dx,param_p) - fdiv_c(F,-eps*np.log(b_t),q,dy,param_p) -\
-                eps/(nI*nJ) * np.sum(Transport_plan-K_t)
-            pdgap = primal-dual
-            """
-
-            # absorb
-            u_t = u_t + eps * np.log(a_t)
-            v_t = v_t + eps * np.log(b_t)
-
-            if (it / n_max) > (eps_ind + 1) / eps_tot:
-                eps_ind += 1
-                eps = eps_vec[eps_ind]
-
-            # update K
-            K_t = np.exp((np.tile(u_t, nJ) + np.tile(v_t, nI).T - C) / eps)
-
-            a_t = np.ones([nI, 1])  # Not really needed
-            b_t = np.ones([nJ, 1])
-            print('it = %d , eps = %f' % (it, eps))
-
-    R = (np.tile(a_t, nJ) * K_t) * np.tile(b_t, nI).T  #  Reconstruct map
-
-    return R, a_t, b_t, primals, duals, pdgaps
-
-
 def calc_transport_pot_sinkhorn(source, target, costs, reg_param=1.e-1) -> (np.ndarray, float, np.ndarray, np.ndarray):
     """
     Implementation for solving ot using sinkhorn, including log-domain stabilization
@@ -659,7 +444,7 @@ def noise_image(im, noise_param=1e-2):
     return noisy_image
 
 
-def calculate_costs(size):
+def calculate_costs(size, wasserstein_power=1):
     """
     This function of an array or image and calculates the cost from it to itself.
 
@@ -670,18 +455,28 @@ def calculate_costs(size):
     - `costs` (numpy.ndarray): A 2D array representing the matrix of costs of transporting pixels
                                 from the first image to the second image.
     """
+
     # 1D case:
     if type(size) == int:
-        # Generate an array of indices from 0 to size-1
-        indices = np.arange(size)
+        X = np.linspace(0, 1, size)
+        costs = np.zeros([size, size], np.float64)
+        dist_f1 = lambda a, b: abs(a - b)
+        dist_f2 = lambda a, b: (a - b) ** 2
 
-        # Use broadcasting to calculate the absolute differences between each pair of indices
-        costs = np.abs(indices[:, np.newaxis] - indices[np.newaxis, :])
+        if wasserstein_power == 1:
+            for it1 in range(size):
+                for it2 in range(size):
+                    costs[it1, it2] = dist_f1(X[it1], X[it2])
+        elif wasserstein_power == 2:
+            for it1 in range(size):
+                for it2 in range(size):
+                    costs[it1, it2] = dist_f2(X[it1], X[it2])
 
         return costs
 
     # 2D case:
     elif len(size) == 2:
+        # TODO : make a difference between W1 and W2
         # Extract the dimensions from the size tuple
         m, n = size
         size_1d = m * n
@@ -700,3 +495,70 @@ def calculate_costs(size):
         costs = distances.reshape((size_1d, size_1d))
 
         return costs
+
+
+def run_experiment_and_append(df, res, noise_param, scale_param, reg_m_param=1):
+    results_classic = []
+    results_noised = []
+    ratios_emd = []
+    results_linear = []
+    results_linear_noised = []
+    ratios_linear = []
+
+    for i in range(100):
+        p, q, p_post, q_post, C = create_distribs(res, noise_param, scale_param)
+
+        results_classic_add = calc_transport_pot_emd(p, q, C)[1]
+        plan_noised, log_noised = ot.unbalanced.mm_unbalanced(a=p_post, b=q_post, M=C, reg_m=reg_m_param, log=True)
+        results_noised_add = log_noised['cost']
+
+        results_classic.append(results_classic_add)
+        results_noised.append(results_noised_add)
+        ratios_emd.append(results_classic_add / results_noised_add)
+
+        results_linear.append(np.linalg.norm(p - q))
+        results_linear_noised.append(np.linalg.norm(p_post - q_post))
+        ratios_linear.append(np.linalg.norm(p - q) / np.linalg.norm(p_post - q_post))
+
+    # Create new row
+    new_row = {
+        'Res': res,
+        'Noise_Param': noise_param,
+        'Scale_Param': scale_param,
+        'Distances_Classic': np.mean(results_classic),
+        'Distances_Noised': np.mean(results_noised),
+        'Ratios_EMD': np.mean(ratios_emd),
+        'Distances_Linear': np.mean(results_linear),
+        'Distances_Linear_Noised': np.mean(results_linear_noised),
+        'Ratios_Linear': np.mean(ratios_linear)
+    }
+
+    # Append new row to DataFrame
+    return df._append(new_row, ignore_index=True)
+
+
+def create_distribs(res, noise, scale_parameter=1):
+    p = make_1D_gauss(res, scale_parameter * np.floor(1 * res / 4.), scale_parameter * 2.).flatten()
+    q = make_1D_gauss(res, scale_parameter * np.floor(3 * res / 4.), scale_parameter * 2.).flatten()
+    X = np.linspace(0, scale_parameter, res)
+
+    C = np.zeros([res, res], dtype=np.float64)
+    dist_f1 = lambda a, b: abs(a - b)
+    dist_f2 = lambda a, b: (a - b) ** 2
+    for it1 in range(res):
+        for it2 in range(res):
+            C[it1, it2] = dist_f1(X[it1], X[it2])
+
+    noise_p = np.random.normal(0, noise, res)
+    noise_q = np.random.normal(0, noise, res)
+
+    p_noised = p + noise_p
+    q_noised = q + noise_q
+
+    p_pos, p_neg = split_signed_measure(p_noised)
+    q_pos, q_neg = split_signed_measure(q_noised)
+
+    p_post = p_pos + q_neg
+    q_post = p_neg + q_pos
+
+    return p, q, p_post, q_post, C

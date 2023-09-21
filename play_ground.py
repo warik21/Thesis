@@ -1,55 +1,20 @@
-import numpy as np
-import matplotlib.pyplot as plt
+import pandas as pd
+from utils.Visualizations import *
 
-# Generate some fake EMD transport map for demonstration
-# Assume images are of size 10x10
-transport_map = np.random.rand(10, 10, 10, 10)
-transport_map /= transport_map.sum((2, 3), keepdims=True)  # Normalize so that sum along each outgoing pixel is 1
+# Initialize DataFrame
+columns = ['Res', 'Noise_Param', 'Scale_Param', 'Distances_Classic', 'Distances_Noised',
+           'Ratios_EMD', 'Distances_Linear', 'Distances_Linear_Noised', 'Ratios_Linear']
+df = pd.DataFrame(columns=columns)
 
-# Fake image1 and image2
-image1 = np.random.rand(10, 10)
-image2 = np.random.rand(10, 10)
+res_values = [10, 50, 100]
+noise_values = [5e-2, 1e-2, 5e-3, 1e-3]
+scale_values = [1, 10, 20, 100]
+reg_m_values = [1, 10, 30]
 
+for res in res_values:
+    for noise in noise_values:
+        for scale in scale_values:
+            for reg_m in reg_m_values:
+                df = run_experiment_and_append(df, res=res, noise_param=noise, scale_param=scale, reg_m_param=reg_m)
 
-def plot_transport(x, y):
-    plt.clf()  # Clear the current figure
-    plt.figure(figsize=(12, 6))
-
-    plt.subplot(1, 3, 1)
-    plt.title('Image 1')
-    plt.imshow(image1, cmap='gray')
-    plt.scatter([y], [x], c='red')
-
-    plt.subplot(1, 3, 2)
-    plt.title('Transport Map')
-    plt.imshow(transport_map[int(x), int(y), :, :], cmap='viridis')
-
-    plt.subplot(1, 3, 3)
-    plt.title('Image 2')
-    plt.imshow(image2, cmap='gray')
-    plt.imshow(transport_map[int(x), int(y), :, :], cmap='viridis', alpha=0.5)
-
-    plt.show()
-
-
-def on_click(event):
-    x, y = event.ydata, event.xdata
-    if event.inaxes is None or x is None or y is None:
-        return
-
-    # Round to the nearest integer coordinate
-    x, y = round(x), round(y)
-
-    # Check bounds
-    if 0 <= x < 10 and 0 <= y < 10:
-        plot_transport(x, y)
-
-
-# Initial plot
-plot_transport(0, 0)
-
-# Connect the click event to the plot update function
-cid = plt.gcf().canvas.mpl_connect('button_press_event', on_click)
-
-# Keep the plot window open
-plt.show()
+df.to_csv('results2.csv', index=False)
