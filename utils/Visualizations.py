@@ -1,5 +1,7 @@
 from utils.utils import *
 from mpl_toolkits.axes_grid1 import make_axes_locatable
+import matplotlib.pyplot as plt
+import matplotlib.gridspec as gridspec
 
 
 def plot_marginals(X, p, q, title, first_distribution_title='Source dist: p',

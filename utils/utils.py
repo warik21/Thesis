@@ -4,31 +4,11 @@ from ott.geometry import pointcloud
 from ott.problems.linear import linear_problem
 from ott.solvers.linear import sinkhorn
 import ot
+from ot.datasets import make_1D_gauss
 import jax.numpy as jnp
 from scipy.special import logsumexp
 import cvxpy as cp
-
-
-def make_1D_gauss(n, m, s):
-    """
-    Return a 1D histogram for a gaussian distribution (n bins, mean m and std s)
-    Parameters
-    ----------
-    n : int
-        number of bins in the histogram
-    m : float
-        mean value of the gaussian distribution
-    s : float
-        standard deviaton of the gaussian distribution
-    Returns
-    -------
-    h : np.array (n,)
-          1D histogram for a gaussian distribution
-    """
-    x = np.arange(n, dtype=np.float64)
-    h = np.exp(-(x - m) ** 2 / (2 * s ** 2))
-    h = h / h.sum()
-    return np.reshape(h, (len(h), 1))
+from scipy.stats import norm
 
 
 def im2mat(img):
@@ -269,28 +249,28 @@ def calc_transport_pot_emd(source, target, costs) -> (np.ndarray, float):
     return Transport_plan, Transport_cost
 
 
-def calc_transport_ott_sinkhorn(source: np.ndarray, target: np.ndarray, costs: np.ndarray,
-                                reg_param: float = 1.e-2):
-    """
-    Not working yet
-
-    source(np.ndarray): The source distribution, p
-    target(np.ndarray): The target distribution, q
-    costs(np.ndarray): The cost matrix
-    reg_param(float): Regularization parameter, epsilon in the literature
-    """
-    source = source.flatten()
-    target = target.flatten()
-    geom = pointcloud.PointCloud(source, target, epsilon=reg_param)
-    prob = linear_problem.LinearProblem(geom, a=source, b=target)
-
-    solver = sinkhorn.Sinkhorn(threshold=1e-9, max_iterations=1000, lse_mode=True)
-
-    out = solver(prob)
-
-    print('hello world')
-
-    return out.matrix
+# def calc_transport_ott_sinkhorn(source: np.ndarray, target: np.ndarray, costs: np.ndarray,
+#                                 reg_param: float = 1.e-2):
+#     """
+#     Not working yet
+#
+#     source(np.ndarray): The source distribution, p
+#     target(np.ndarray): The target distribution, q
+#     costs(np.ndarray): The cost matrix
+#     reg_param(float): Regularization parameter, epsilon in the literature
+#     """
+#     source = source.flatten()
+#     target = target.flatten()
+#     geom = pointcloud.PointCloud(source, target, epsilon=reg_param)
+#     prob = linear_problem.LinearProblem(geom, a=source, b=target)
+#
+#     solver = sinkhorn.Sinkhorn(threshold=1e-9, max_iterations=1000, lse_mode=True)
+#
+#     out = solver(prob)
+#
+#     print('hello world')
+#
+#     return out.matrix
 
 
 def unbalanced_sinkhorn(alpha: np.ndarray, beta: np.ndarray, costs: np.ndarray, eps=1.e-1,
@@ -497,6 +477,7 @@ def calculate_costs(size, wasserstein_power=1):
         return costs
 
 
+# noinspection PyProtectedMember
 def run_experiment_and_append(df, res, noise_param, scale_param, reg_m_param=1):
     results_classic = []
     results_noised = []
@@ -506,11 +487,13 @@ def run_experiment_and_append(df, res, noise_param, scale_param, reg_m_param=1):
     ratios_linear = []
 
     for i in range(100):
-        p, q, p_post, q_post, C = create_distribs(res, noise_param, scale_param)
+        p, q, p_post, q_post, C = create_distribs_and_costs(res, noise_param, scale_param)
 
         results_classic_add = calc_transport_pot_emd(p, q, C)[1]
-        plan_noised, log_noised = ot.unbalanced.mm_unbalanced(a=p_post, b=q_post, M=C, reg_m=reg_m_param, log=True)
-        results_noised_add = log_noised['cost']
+        # plan_noised, log_noised = ot.unbalanced.mm_unbalanced(a=p_post, b=q_post, M=C, reg_m=reg_m_param, log=True)
+        # results_noised_add = log_noised['cost']
+        plan_noised, cost_noised = calc_transport_pot_emd(p_post, q_post, C)
+        results_noised_add = cost_noised
 
         results_classic.append(results_classic_add)
         results_noised.append(results_noised_add)
@@ -525,6 +508,7 @@ def run_experiment_and_append(df, res, noise_param, scale_param, reg_m_param=1):
         'Res': res,
         'Noise_Param': noise_param,
         'Scale_Param': scale_param,
+        # 'Reg_M_Param': reg_m_param,
         'Distances_Classic': np.mean(results_classic),
         'Distances_Noised': np.mean(results_noised),
         'Ratios_EMD': np.mean(ratios_emd),
@@ -537,17 +521,21 @@ def run_experiment_and_append(df, res, noise_param, scale_param, reg_m_param=1):
     return df._append(new_row, ignore_index=True)
 
 
-def create_distribs(res, noise, scale_parameter=1):
-    p = make_1D_gauss(res, scale_parameter * np.floor(1 * res / 4.), scale_parameter * 2.).flatten()
-    q = make_1D_gauss(res, scale_parameter * np.floor(3 * res / 4.), scale_parameter * 2.).flatten()
-    X = np.linspace(0, scale_parameter, res)
+def create_distribs_and_costs(res, noise, scale_parameter=1, distance_metric='L1'):
+    X = np.linspace(0,scale_parameter,res)
+    p = norm.pdf(X, scale_parameter * 0.375, scale_parameter * 0.1)
+    q = norm.pdf(X, scale_parameter * 0.625, scale_parameter * 0.1)
 
     C = np.zeros([res, res], dtype=np.float64)
-    dist_f1 = lambda a, b: abs(a - b)
-    dist_f2 = lambda a, b: (a - b) ** 2
+    if distance_metric == 'L1':
+        dist = lambda a, b: abs(a - b)
+    elif distance_metric == 'L2':
+        dist = lambda a, b: (a - b) ** 2
+    else:
+        raise ValueError('Invalid distance metric. Must be either "L1" or "L2".')
     for it1 in range(res):
         for it2 in range(res):
-            C[it1, it2] = dist_f1(X[it1], X[it2])
+            C[it1, it2] = dist(X[it1], X[it2])
 
     noise_p = np.random.normal(0, noise, res)
     noise_q = np.random.normal(0, noise, res)
@@ -561,4 +549,4 @@ def create_distribs(res, noise, scale_parameter=1):
     p_post = p_pos + q_neg
     q_post = p_neg + q_pos
 
-    return p, q, p_post, q_post, C
+    return p, q, p_post/p_post.sum(), q_post/q_post.sum(), C
