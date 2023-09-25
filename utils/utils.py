@@ -522,9 +522,10 @@ def run_experiment_and_append(df, res, noise_param, scale_param, reg_m_param=1):
 
 
 def create_distribs_and_costs(res, noise, scale_parameter=1, distance_metric='L1'):
-    X = np.linspace(0,scale_parameter,res)
-    p = norm.pdf(X, scale_parameter * 0.375, scale_parameter * 0.1)
-    q = norm.pdf(X, scale_parameter * 0.625, scale_parameter * 0.1)
+    X = np.linspace(start=0, stop=scale_parameter, num=res)
+    # x is the linear space in which the distributions are defined, loc is the mean, scale is the standard deviation
+    p = norm.pdf(x=X, loc=scale_parameter * 0.25, scale=scale_parameter * 0.05)
+    q = norm.pdf(x=X, loc=scale_parameter * 0.75, scale=scale_parameter * 0.05)
 
     C = np.zeros([res, res], dtype=np.float64)
     if distance_metric == 'L1':
