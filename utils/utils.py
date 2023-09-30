@@ -4,7 +4,6 @@ from ott.geometry import pointcloud
 from ott.problems.linear import linear_problem
 from ott.solvers.linear import sinkhorn
 import ot
-from ot.datasets import make_1D_gauss
 import jax.numpy as jnp
 from scipy.special import logsumexp
 import cvxpy as cp
@@ -477,27 +476,36 @@ def calculate_costs(size, wasserstein_power=1):
         return costs
 
 
-# noinspection PyProtectedMember
-def run_experiment_and_append(df, res, noise_param, scale_param, reg_m_param=1):
+# noinspection PyProtectedMember,PyUnboundLocalVariable
+def run_experiment_and_append(df, res, noise_param, scale_param, reg_m_param=10):
     results_classic = []
     results_noised = []
     ratios_emd = []
     results_linear = []
     results_linear_noised = []
     ratios_linear = []
+    diff_classics = []
+    diff_posts = []
 
     for i in range(100):
         p, q, p_post, q_post, C = create_distribs_and_costs(res, noise_param, scale_param)
 
         results_classic_add = calc_transport_pot_emd(p, q, C)[1]
-        # plan_noised, log_noised = ot.unbalanced.mm_unbalanced(a=p_post, b=q_post, M=C, reg_m=reg_m_param, log=True)
-        # results_noised_add = log_noised['cost']
-        plan_noised, cost_noised = calc_transport_pot_emd(p_post, q_post, C)
-        results_noised_add = cost_noised
+        plan_noised, results_noised_add = calc_transport_pot_emd(p_post, q_post, C)
 
         results_classic.append(results_classic_add)
         results_noised.append(results_noised_add)
         ratios_emd.append(results_classic_add / results_noised_add)
+
+        cumsum_p = np.cumsum(p)
+        cumsum_q = np.cumsum(q)
+        diff_classic = np.abs(cumsum_p - cumsum_q)
+        diff_classics.append(diff_classic.sum())
+
+        cumsum_p_post = np.cumsum(p_post)
+        cumsum_q_post = np.cumsum(q_post)
+        diff_post = np.abs(cumsum_p_post - cumsum_q_post)
+        diff_posts.append(diff_post.sum())
 
         results_linear.append(np.linalg.norm(p - q))
         results_linear_noised.append(np.linalg.norm(p_post - q_post))
@@ -508,9 +516,11 @@ def run_experiment_and_append(df, res, noise_param, scale_param, reg_m_param=1):
         'Res': res,
         'Noise_Param': noise_param,
         'Scale_Param': scale_param,
-        # 'Reg_M_Param': reg_m_param,
         'Distances_Classic': np.mean(results_classic),
         'Distances_Noised': np.mean(results_noised),
+        'Cumsum_Classic': np.mean(diff_classics),
+        'Cumsum_Noised': np.mean(diff_posts),
+        'Ratios_emd_cumsum': np.mean(results_noised) / np.mean(diff_posts),
         'Ratios_EMD': np.mean(ratios_emd),
         'Distances_Linear': np.mean(results_linear),
         'Distances_Linear_Noised': np.mean(results_linear_noised),
@@ -522,10 +532,19 @@ def run_experiment_and_append(df, res, noise_param, scale_param, reg_m_param=1):
 
 
 def create_distribs_and_costs(res, noise, scale_parameter=1, distance_metric='L1'):
-    X = np.linspace(start=0, stop=scale_parameter, num=res)
-    # x is the linear space in which the distributions are defined, loc is the mean, scale is the standard deviation
-    p = norm.pdf(x=X, loc=scale_parameter * 0.25, scale=scale_parameter * 0.05)
-    q = norm.pdf(x=X, loc=scale_parameter * 0.75, scale=scale_parameter * 0.05)
+    """
+    This function creates two 1D distributions and a cost matrix between them.
+    :param res: resolution of the distributions
+    :param noise: noise parameter
+    :param scale_parameter: scale parameter of the distributions
+    :param distance_metric: distance metric to use
+    :return: p, q, C
+    """
+    X = np.linspace(0, scale_parameter, res)
+    p = norm.pdf(X, scale_parameter * 0.35, scale_parameter * 0.1)
+    p = p / p.sum()
+    q = norm.pdf(X, scale_parameter * 0.65, scale_parameter * 0.1)
+    q = q / q.sum()
 
     C = np.zeros([res, res], dtype=np.float64)
     if distance_metric == 'L1':
@@ -550,4 +569,35 @@ def create_distribs_and_costs(res, noise, scale_parameter=1, distance_metric='L1
     p_post = p_pos + q_neg
     q_post = p_neg + q_pos
 
-    return p, q, p_post/p_post.sum(), q_post/q_post.sum(), C
+    mean_distribs = (q_post.sum() + p_post.sum()) / 2
+    p_post = p_post * (mean_distribs / p_post.sum())
+    q_post = q_post * (mean_distribs / q_post.sum())
+
+    return p, q, p_post, q_post, C
+
+
+def create_images_and_costs(im1_base, im2_base, noise, distance_metric='L1'):
+    """
+    This function creates two 1D distributions and a cost matrix between them.
+    :param im2_base:
+    :param im1_base:
+    :param noise: noise parameter
+    :param distance_metric: distance metric to use
+    :return: p, q, C
+    """
+    C = calculate_costs(im1_base.shape)
+
+    im1_noised = noise_image(im1_base, noise)
+    im2_noised = noise_image(im2_base, noise)
+
+    im1_pos, im1_neg = split_signed_measure(im1_noised)
+    im2_pos, im2_neg = split_signed_measure(im2_noised)
+
+    im1_post = im1_pos + im2_neg
+    im2_post = im1_neg + im2_pos
+
+    mean_distribs = (im2_post.sum() + im1_post.sum()) / 2
+    im1_post = im1_post * (mean_distribs / im1_post.sum())
+    im2_post = im2_post * (mean_distribs / im2_post.sum())
+
+    return im1_post, im2_post, C
