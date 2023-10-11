@@ -223,14 +223,10 @@ def calc_transport_pot_sinkhorn(source, target, costs, reg_param=1.e-1) -> (np.n
     costs(np.ndarray): The cost matrix
     reg_param(float): Regularization parameter, epsilon in the literature
     """
-    K_t: np.ndarray = np.exp(costs / (-reg_param))
-    Transport_cost, logs = ot.sinkhorn(source, target, costs, reg=reg_param, log=True)
-    # Transport_cost, logs = ot.bregman.sinkhorn_stabilized(source.flatten(), target.flatten(), costs, reg=reg_param, log=True)
-    u: np.ndarray = logs['u'].flatten()
-    v: np.ndarray = logs['v'].flatten()
-    Transport_plan: np.ndarray = np.diag(u) @ K_t @ np.diag(v)
+    Transport_plan = ot.sinkhorn(source.flatten(), target.flatten(), costs, reg=reg_param)
+    Transport_cost = np.sum(Transport_plan * costs)
 
-    return Transport_plan, Transport_cost, u, v
+    return Transport_plan, Transport_cost
 
 
 def calc_transport_pot_emd(source, target, costs) -> (np.ndarray, float):
@@ -423,7 +419,7 @@ def noise_image(im, noise_param=1e-2):
     return noisy_image
 
 
-def calculate_costs(size, wasserstein_power=1):
+def calculate_costs(size, distance_metric='L1'):
     """
     This function of an array or image and calculates the cost from it to itself.
 
@@ -439,17 +435,16 @@ def calculate_costs(size, wasserstein_power=1):
     if type(size) == int:
         X = np.linspace(0, 1, size)
         costs = np.zeros([size, size], np.float64)
-        dist_f1 = lambda a, b: abs(a - b)
-        dist_f2 = lambda a, b: (a - b) ** 2
 
-        if wasserstein_power == 1:
-            for it1 in range(size):
-                for it2 in range(size):
-                    costs[it1, it2] = dist_f1(X[it1], X[it2])
-        elif wasserstein_power == 2:
-            for it1 in range(size):
-                for it2 in range(size):
-                    costs[it1, it2] = dist_f2(X[it1], X[it2])
+        if distance_metric == 'L1':
+            dist = lambda a, b: abs(a - b)
+        elif distance_metric == 'L2':
+            dist = lambda a, b: (a - b) ** 2
+        else:
+            raise ValueError('Invalid distance metric. Must be either "L1" or "L2".')
+        for it1 in range(size):
+            for it2 in range(size):
+                costs[it1, it2] = dist(X[it1], X[it2])
 
         return costs
 
@@ -477,7 +472,7 @@ def calculate_costs(size, wasserstein_power=1):
 
 
 # noinspection PyProtectedMember,PyUnboundLocalVariable
-def run_experiment_and_append(df, res, noise_param, scale_param, reg_m_param=10):
+def run_experiment_and_append(df, res, noise_param, scale_param):
     results_classic = []
     results_noised = []
     ratios_emd = []
@@ -531,6 +526,44 @@ def run_experiment_and_append(df, res, noise_param, scale_param, reg_m_param=10)
     return df._append(new_row, ignore_index=True)
 
 
+def run_experiment_and_append_images(df, im1, im2, noise_param):
+    results_classic = []
+    results_noised = []
+    ratios_emd = []
+    results_linear = []
+    results_linear_noised = []
+    ratios_linear = []
+
+    for i in range(100):
+        im1_post, im2_post, C = create_images_and_costs(im1_base=im1, im2_base=im2, noise=noise_param)
+
+        results_classic_add = calc_transport_pot_emd(im1.flatten(), im2.flatten(), C)[1]
+        results_noised_add = calc_transport_pot_emd(im1_post.flatten(), im2_post.flatten(), C)[1]
+
+        results_classic.append(results_classic_add)
+        results_noised.append(results_noised_add)
+        ratios_emd.append(results_classic_add / results_noised_add)
+
+        results_linear.append(np.linalg.norm(im1 - im2))
+        results_linear_noised.append(np.linalg.norm(im1_post - im2_post))
+        ratios_linear.append(np.linalg.norm(im1 - im2) / np.linalg.norm(im1_post - im2_post))
+
+    # Create new row
+    new_row = {
+        'Noise_Param': noise_param,
+        'Im_Size': im1.shape[0],
+        'Distances_Classic': np.mean(results_classic),
+        'Distances_Noised': np.mean(results_noised),
+        'Ratios_EMD': np.mean(ratios_emd),
+        'Distances_Linear': np.mean(results_linear),
+        'Distances_Linear_Noised': np.mean(results_linear_noised),
+        'Ratios_Linear': np.mean(ratios_linear)
+    }
+
+    # Append new row to DataFrame
+    return df._append(new_row, ignore_index=True)
+
+
 def create_distribs_and_costs(res, noise, scale_parameter=1, distance_metric='L1'):
     """
     This function creates two 1D distributions and a cost matrix between them.
@@ -546,16 +579,7 @@ def create_distribs_and_costs(res, noise, scale_parameter=1, distance_metric='L1
     q = norm.pdf(X, scale_parameter * 0.65, scale_parameter * 0.1)
     q = q / q.sum()
 
-    C = np.zeros([res, res], dtype=np.float64)
-    if distance_metric == 'L1':
-        dist = lambda a, b: abs(a - b)
-    elif distance_metric == 'L2':
-        dist = lambda a, b: (a - b) ** 2
-    else:
-        raise ValueError('Invalid distance metric. Must be either "L1" or "L2".')
-    for it1 in range(res):
-        for it2 in range(res):
-            C[it1, it2] = dist(X[it1], X[it2])
+    C = calculate_costs(res, distance_metric=distance_metric)
 
     noise_p = np.random.normal(0, noise, res)
     noise_q = np.random.normal(0, noise, res)
@@ -579,13 +603,13 @@ def create_distribs_and_costs(res, noise, scale_parameter=1, distance_metric='L1
 def create_images_and_costs(im1_base, im2_base, noise, distance_metric='L1'):
     """
     This function creates two 1D distributions and a cost matrix between them.
-    :param im2_base:
-    :param im1_base:
+    :param im2_base: The initial image 2
+    :param im1_base: The initial image 1
     :param noise: noise parameter
     :param distance_metric: distance metric to use
     :return: p, q, C
     """
-    C = calculate_costs(im1_base.shape)
+    C = calculate_costs(im1_base.shape, distance_metric=distance_metric)
 
     im1_noised = noise_image(im1_base, noise)
     im2_noised = noise_image(im2_base, noise)
