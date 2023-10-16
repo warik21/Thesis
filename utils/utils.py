@@ -7,7 +7,7 @@ import ot
 import jax.numpy as jnp
 from scipy.special import logsumexp
 import cvxpy as cp
-from scipy.stats import norm
+from scipy.stats import norm, sem, t
 
 
 def im2mat(img):
@@ -244,30 +244,6 @@ def calc_transport_pot_emd(source, target, costs) -> (np.ndarray, float):
     return Transport_plan, Transport_cost
 
 
-# def calc_transport_ott_sinkhorn(source: np.ndarray, target: np.ndarray, costs: np.ndarray,
-#                                 reg_param: float = 1.e-2):
-#     """
-#     Not working yet
-#
-#     source(np.ndarray): The source distribution, p
-#     target(np.ndarray): The target distribution, q
-#     costs(np.ndarray): The cost matrix
-#     reg_param(float): Regularization parameter, epsilon in the literature
-#     """
-#     source = source.flatten()
-#     target = target.flatten()
-#     geom = pointcloud.PointCloud(source, target, epsilon=reg_param)
-#     prob = linear_problem.LinearProblem(geom, a=source, b=target)
-#
-#     solver = sinkhorn.Sinkhorn(threshold=1e-9, max_iterations=1000, lse_mode=True)
-#
-#     out = solver(prob)
-#
-#     print('hello world')
-#
-#     return out.matrix
-
-
 def unbalanced_sinkhorn(alpha: np.ndarray, beta: np.ndarray, costs: np.ndarray, eps=1.e-1,
                         max_iter=1000, return_plan=False) -> (np.ndarray, np.ndarray, np.ndarray):
     """
@@ -336,7 +312,6 @@ def approx_phi(divergence: str, eps: float, p: np.ndarray, ro: float = 0.5):
         raise ValueError('Divergence not supported')
 
 
-# noinspection PyArgumentList
 def create_d_phi(source: np.ndarray, target: np.ndarray, ro: float) -> cp.Variable:
     """
     Takes two probability distributions and calculates the KL divergence between them.
@@ -506,13 +481,17 @@ def run_experiment_and_append(df, res, noise_param, scale_param):
         results_linear_noised.append(np.linalg.norm(p_post - q_post))
         ratios_linear.append(np.linalg.norm(p - q) / np.linalg.norm(p_post - q_post))
 
+    mean_classic, ci_classic = confidence_interval(results_classic)
+    mean_noised, ci_noised = confidence_interval(results_noised)
     # Create new row
     new_row = {
         'Res': res,
         'Noise_Param': noise_param,
         'Scale_Param': scale_param,
-        'Distances_Classic': np.mean(results_classic),
-        'Distances_Noised': np.mean(results_noised),
+        'Distances_Classic': mean_classic,
+        'CI_Distances_Classic': ci_classic,
+        'Distances_Noised': mean_noised,
+        'CI_Distances_Noised': ci_noised,
         'Cumsum_Classic': np.mean(diff_classics),
         'Cumsum_Noised': np.mean(diff_posts),
         'Ratios_emd_cumsum': np.mean(results_noised) / np.mean(diff_posts),
@@ -625,3 +604,20 @@ def create_images_and_costs(im1_base, im2_base, noise, distance_metric='L1'):
     im2_post = im2_post * (mean_distribs / im2_post.sum())
 
     return im1_post, im2_post, C
+
+
+def confidence_interval(data, confidence=0.96):
+    # Compute the sample mean
+    mean = np.mean(data)
+
+    # Compute the standard error of the mean
+    std_err = sem(data)
+
+    # Get the degrees of freedom and lookup the t-value
+    dof = len(data) - 1
+    t_val = t.ppf((1 + confidence) / 2, dof)
+
+    # Compute the margin of error
+    margin_error = t_val * std_err
+
+    return mean, margin_error
