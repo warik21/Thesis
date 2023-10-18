@@ -9,9 +9,11 @@ df = pd.DataFrame(columns=columns)
 
 # TODO : add original distance as a parameter and column
 
-res_values = [int(x) for x in np.linspace(start=100, stop=1000, num=10)]
+# res_values = [int(x) for x in np.linspace(start=100, stop=1000, num=10)]
+res_values = [500]
 noise_values = np.logspace(start=-3, stop=1, num=22)  # We want a multiplication of 3 + 1 because we start at 0
-scale_values = [int(x) for x in np.linspace(start=100, stop=1000, num=10)]
+# scale_values = [int(x) for x in np.linspace(start=100, stop=1000, num=10)]
+scale_values = [100]
 # reg_m_values = [1, 10, 30]  # This is not needed now since we are preforming balanced ot
 
 for res in res_values:
@@ -19,7 +21,8 @@ for res in res_values:
         for scale in scale_values:
             df = run_experiment_and_append(df, res=res, noise_param=noise, scale_param=scale)
     print('Done with res: ', res)
-df.to_csv('results_measures_expanded.csv', index=False)
+# df.to_csv('results_measures_expanded.csv', index=False)
+df.to_csv('results_measures_test.csv', index=False)
 
 # Images:
 columns = ['Noise_Param', 'Im_Size', 'Distances_Classic', 'Distances_Noised', 'Ratios_EMD',

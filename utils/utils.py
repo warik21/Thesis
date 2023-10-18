@@ -447,7 +447,7 @@ def calculate_costs(size, distance_metric='L1'):
 
 
 # noinspection PyProtectedMember,PyUnboundLocalVariable
-def run_experiment_and_append(df, res, noise_param, scale_param):
+def run_experiment_and_append(df, res, noise_param, scale_param, reg_m_param=10):
     results_classic = []
     results_noised = []
     ratios_emd = []
@@ -505,7 +505,7 @@ def run_experiment_and_append(df, res, noise_param, scale_param):
     return df._append(new_row, ignore_index=True)
 
 
-def run_experiment_and_append_images(df, im1, im2, noise_param):
+def run_experiment_and_append_images(df, im1, im2, noise_param, n_samples=100):
     results_classic = []
     results_noised = []
     ratios_emd = []
@@ -513,7 +513,7 @@ def run_experiment_and_append_images(df, im1, im2, noise_param):
     results_linear_noised = []
     ratios_linear = []
 
-    for i in range(100):
+    for i in range(n_samples):
         im1_post, im2_post, C = create_images_and_costs(im1_base=im1, im2_base=im2, noise=noise_param)
 
         results_classic_add = calc_transport_pot_emd(im1.flatten(), im2.flatten(), C)[1]
@@ -527,38 +527,42 @@ def run_experiment_and_append_images(df, im1, im2, noise_param):
         results_linear_noised.append(np.linalg.norm(im1_post - im2_post))
         ratios_linear.append(np.linalg.norm(im1 - im2) / np.linalg.norm(im1_post - im2_post))
 
-    # Create new row
+    mean_noised, ci_noised = confidence_interval(results_noised)
+    mean_linear_noised, ci_linear_noised = confidence_interval(results_linear_noised)
+
     new_row = {
         'Noise_Param': noise_param,
-        'Im_Size': im1.shape[0],
         'Distances_Classic': np.mean(results_classic),
-        'Distances_Noised': np.mean(results_noised),
+        'Distances_Noised': mean_noised,
+        'CI_Distances_Noised': ci_noised,
         'Ratios_EMD': np.mean(ratios_emd),
         'Distances_Linear': np.mean(results_linear),
-        'Distances_Linear_Noised': np.mean(results_linear_noised),
+        'Distances_Linear_Noised': mean_linear_noised,
+        'CI_Distances_Linear_Noised': ci_linear_noised,
         'Ratios_Linear': np.mean(ratios_linear)
     }
 
     # Append new row to DataFrame
     return df._append(new_row, ignore_index=True)
 
-
-def create_distribs_and_costs(res, noise, scale_parameter=1, distance_metric='L1'):
-    """
-    This function creates two 1D distributions and a cost matrix between them.
-    :param res: resolution of the distributions
-    :param noise: noise parameter
-    :param scale_parameter: scale parameter of the distributions
-    :param distance_metric: distance metric to use
-    :return: p, q, C
-    """
+def create_distribs_and_costs(res, noise, scale_parameter=1, distance_metric='L1', first_center=0.35, first_std=0.1,
+                              second_center=0.65, second_std=0.1):
     X = np.linspace(0, scale_parameter, res)
-    p = norm.pdf(X, scale_parameter * 0.35, scale_parameter * 0.1)
+    p = norm.pdf(X, scale_parameter * first_center, scale_parameter * first_std)
     p = p / p.sum()
-    q = norm.pdf(X, scale_parameter * 0.65, scale_parameter * 0.1)
+    q = norm.pdf(X, scale_parameter * second_center, scale_parameter * second_std)
     q = q / q.sum()
 
-    C = calculate_costs(res, distance_metric=distance_metric)
+    C = np.zeros([res, res], dtype=np.float64)
+    if distance_metric == 'L1':
+        dist = lambda a, b: abs(a - b)
+    elif distance_metric == 'L2':
+        dist = lambda a, b: (a - b) ** 2
+    else:
+        raise ValueError('Invalid distance metric. Must be either "L1" or "L2".')
+    for it1 in range(res):
+        for it2 in range(res):
+            C[it1, it2] = dist(X[it1], X[it2])
 
     noise_p = np.random.normal(0, noise, res)
     noise_q = np.random.normal(0, noise, res)
