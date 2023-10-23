@@ -406,17 +406,19 @@ def calculate_costs(size, distance_metric='L1'):
                                 from the first image to the second image.
     """
 
+    # Helper function for L1 and L2 distance
+    if distance_metric == 'L1':
+        dist = lambda a, b: abs(a - b)
+    elif distance_metric == 'L2':
+        dist = lambda a, b: (a - b) ** 2
+    else:
+        raise ValueError('Invalid distance metric. Must be either "L1" or "L2".')
+
     # 1D case:
-    if type(size) == int:
+    if isinstance(size, int):
         X = np.linspace(0, 1, size)
         costs = np.zeros([size, size], np.float64)
 
-        if distance_metric == 'L1':
-            dist = lambda a, b: abs(a - b)
-        elif distance_metric == 'L2':
-            dist = lambda a, b: (a - b) ** 2
-        else:
-            raise ValueError('Invalid distance metric. Must be either "L1" or "L2".')
         for it1 in range(size):
             for it2 in range(size):
                 costs[it1, it2] = dist(X[it1], X[it2])
@@ -425,29 +427,27 @@ def calculate_costs(size, distance_metric='L1'):
 
     # 2D case:
     elif len(size) == 2:
-        # TODO : make a difference between W1 and W2
-        # Extract the dimensions from the size tuple
         m, n = size
         size_1d = m * n
 
-        # Generate coordinates for the grid
         coords = np.array([[i, j] for i in range(m) for j in range(n)])
-
-        # Calculate the distance between each pair of points using broadcasting
         delta = coords[:, np.newaxis, :] - coords[np.newaxis, :, :]
-        delta_sq = delta ** 2
 
-        # Compute the Euclidean distance by summing the squared differences and taking the square root
-        distances = np.sqrt(np.sum(delta_sq, axis=2)).flatten()
+        if distance_metric == 'L1':
+            distances = np.sum(np.abs(delta), axis=2)
+        elif distance_metric == 'L2':
+            distances = np.sqrt(np.sum(delta ** 2, axis=2))
+        else:
+            raise ValueError('Invalid distance metric. Must be either "L1" or "L2".')
 
-        # Reshape the 1D distances into a 2D cost matrix
         costs = distances.reshape((size_1d, size_1d))
 
         return costs
 
 
 # noinspection PyProtectedMember,PyUnboundLocalVariable
-def run_experiment_and_append(df, res, noise_param, scale_param, reg_m_param=10):
+def run_experiment_and_append(df, res, noise_param, scale_param, n_samples=100, first_center=0.35, first_std=0.1,
+                              second_center=0.65, second_std=0.1):
     results_classic = []
     results_noised = []
     ratios_emd = []
@@ -456,9 +456,18 @@ def run_experiment_and_append(df, res, noise_param, scale_param, reg_m_param=10)
     ratios_linear = []
     diff_classics = []
     diff_posts = []
+    signals = []
+    noise_values = []
 
-    for i in range(100):
-        p, q, p_post, q_post, C = create_distribs_and_costs(res, noise_param, scale_param)
+    for i in range(n_samples):
+        p, q, p_noised, q_noised, p_post, q_post, C = create_distribs_and_costs(res, noise_param, scale_param,
+                                                                                first_center=first_center,
+                                                                                first_std=first_std,
+                                                                                second_center=second_center,
+                                                                                second_std=second_std)
+
+        signals.append((p ** 2).sum())
+        noise_values.append(((p_noised-p) ** 2).sum())
 
         results_classic_add = calc_transport_pot_emd(p, q, C)[1]
         plan_noised, results_noised_add = calc_transport_pot_emd(p_post, q_post, C)
@@ -478,16 +487,21 @@ def run_experiment_and_append(df, res, noise_param, scale_param, reg_m_param=10)
         diff_posts.append(diff_post.sum())
 
         results_linear.append(np.linalg.norm(p - q))
-        results_linear_noised.append(np.linalg.norm(p_post - q_post))
-        ratios_linear.append(np.linalg.norm(p - q) / np.linalg.norm(p_post - q_post))
+        results_linear_noised.append(np.linalg.norm(p_noised - q_noised))
+        ratios_linear.append(np.linalg.norm(p - q) / np.linalg.norm(p_noised - q_noised))
 
     mean_classic, ci_classic = confidence_interval(results_classic)
     mean_noised, ci_noised = confidence_interval(results_noised)
+    signal = np.mean(signals)
+    noise = np.mean(noise_values)
     # Create new row
     new_row = {
         'Res': res,
         'Noise_Param': noise_param,
         'Scale_Param': scale_param,
+        'Signal_Power': signal,
+        'Noise_Power': noise,
+        'SNR': signal / noise,
         'Distances_Classic': mean_classic,
         'CI_Distances_Classic': ci_classic,
         'Distances_Noised': mean_noised,
@@ -524,6 +538,7 @@ def run_experiment_and_append_images(df, im1, im2, noise_param, n_samples=100):
         ratios_emd.append(results_classic_add / results_noised_add)
 
         results_linear.append(np.linalg.norm(im1 - im2))
+        # TODO: Change this to be between noised and not posterior images
         results_linear_noised.append(np.linalg.norm(im1_post - im2_post))
         ratios_linear.append(np.linalg.norm(im1 - im2) / np.linalg.norm(im1_post - im2_post))
 
@@ -544,6 +559,7 @@ def run_experiment_and_append_images(df, im1, im2, noise_param, n_samples=100):
 
     # Append new row to DataFrame
     return df._append(new_row, ignore_index=True)
+
 
 def create_distribs_and_costs(res, noise, scale_parameter=1, distance_metric='L1', first_center=0.35, first_std=0.1,
                               second_center=0.65, second_std=0.1):
@@ -580,7 +596,7 @@ def create_distribs_and_costs(res, noise, scale_parameter=1, distance_metric='L1
     p_post = p_post * (mean_distribs / p_post.sum())
     q_post = q_post * (mean_distribs / q_post.sum())
 
-    return p, q, p_post, q_post, C
+    return p, q, p_noised, q_noised, p_post, q_post, C
 
 
 def create_images_and_costs(im1_base, im2_base, noise, distance_metric='L1'):
