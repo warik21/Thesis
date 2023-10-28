@@ -9,24 +9,29 @@ from utils.Visualizations import *
 #
 # # TODO : add original distance as a parameter and column
 #
-# res_values = [int(x) for x in np.linspace(start=100, stop=1000, num=10)]
 df = pd.DataFrame()
-res_values = [500]
-noise_values = np.logspace(start=-3, stop=1, num=22)  # We want a multiplication of 3 + 1 because we start at 0
-# scale_values = [int(x) for x in np.linspace(start=100, stop=1000, num=10)]
-scale_values = [100]
+
+res_values = [int(x) for x in np.linspace(start=100, stop=1000, num=10)]
+# res_values = [int(x) for x in np.linspace(start=100, stop=500, num=5)]
+SNR_values = np.logspace(start=-2, stop=1, num=31)  # We want a multiplication of 3 + 1 because we start at 0
+scale = 1
 for res in res_values:
-    for noise in noise_values:
-        for scale in scale_values:
-            df = run_experiment_and_append(df, res=res, noise_param=noise, scale_param=scale)
+    for SNR in SNR_values:
+        X = np.linspace(0, scale, res)
+        sample_distribution = norm.pdf(X, scale * 0.65, scale * 0.1)
+        sample_distribution = sample_distribution / sample_distribution.sum()
+        signal_power = (sample_distribution ** 2).sum()
+        noise = noise_from_SNR(SNR, signal_power=signal_power, res=res)
+        df = run_experiment_and_append(df, res=res, noise_param=noise, scale_param=scale, SNR=SNR, num_samples=200)
     print('Done with res: ', res)
 # df.to_csv('results_measures_expanded.csv', index=False)
-df.to_csv('results_measures_test.csv', index=False)
+df.to_csv('csvs/results_measures_SNR_test.csv', index=False)
+
 
 # Images:
-columns = ['Noise_Param', 'Im_Size', 'Distances_Classic', 'Distances_Noised', 'Ratios_EMD',
-           'Distances_Linear', 'Distances_Linear_Noised', 'Ratios_Linear']
-df = pd.DataFrame(columns=columns)
+# columns = ['Noise_Param', 'Im_Size', 'Distances_Classic', 'Distances_Noised', 'Ratios_EMD',
+#            'Distances_Linear', 'Distances_Linear_Noised', 'Ratios_Linear']
+# df = pd.DataFrame(columns=columns)
 
 # im_sizes = [10, 20, 50, 100]
 # noises = np.linspace(start=1e-3, stop=1, num=22)

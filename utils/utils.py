@@ -446,7 +446,7 @@ def calculate_costs(size, distance_metric='L1'):
 
 
 # noinspection PyProtectedMember,PyUnboundLocalVariable
-def run_experiment_and_append(df, res, noise_param, scale_param, n_samples=100, first_center=0.35, first_std=0.1,
+def run_experiment_and_append(df, res, noise_param, scale_param, SNR=0, num_samples=100, first_center=0.35, first_std=0.1,
                               second_center=0.65, second_std=0.1):
     results_classic = []
     results_noised = []
@@ -459,7 +459,7 @@ def run_experiment_and_append(df, res, noise_param, scale_param, n_samples=100, 
     signals = []
     noise_values = []
 
-    for i in range(n_samples):
+    for i in range(num_samples):
         p, q, p_noised, q_noised, p_post, q_post, C = create_distribs_and_costs(res, noise_param, scale_param,
                                                                                 first_center=first_center,
                                                                                 first_std=first_std,
@@ -494,6 +494,9 @@ def run_experiment_and_append(df, res, noise_param, scale_param, n_samples=100, 
     mean_noised, ci_noised = confidence_interval(results_noised)
     signal = np.mean(signals)
     noise = np.mean(noise_values)
+
+    if SNR==0:  # If SNR is not given, calculate it
+        SNR = signal/noise
     # Create new row
     new_row = {
         'Res': res,
@@ -501,7 +504,7 @@ def run_experiment_and_append(df, res, noise_param, scale_param, n_samples=100, 
         'Scale_Param': scale_param,
         'Signal_Power': signal,
         'Noise_Power': noise,
-        'SNR': signal / noise,
+        'SNR': SNR,
         'Distances_Classic': mean_classic,
         'CI_Distances_Classic': ci_classic,
         'Distances_Noised': mean_noised,
@@ -641,3 +644,17 @@ def confidence_interval(data, confidence=0.96):
     margin_error = t_val * std_err
 
     return mean, margin_error
+
+
+def noise_from_SNR(SNR, signal_power, res):
+    """
+    This function calculates the noise power from the SNR and the signal power. and decides what the noise parameter
+    is according to the power. The noise is assumed to be Gaussian.
+    :param res:
+    :param SNR:
+    :param signal_power:
+    :return:
+    """
+    noise_power = signal_power / SNR
+    noise_param = np.sqrt(noise_power / res)
+    return noise_param
