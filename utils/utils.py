@@ -522,7 +522,7 @@ def run_experiment_and_append(df, res, noise_param, scale_param, SNR=0, num_samp
     return df._append(new_row, ignore_index=True)
 
 
-def run_experiment_and_append_images(df, im1, im2, noise_param, n_samples=100):
+def run_experiment_and_append_images(df, im1, im2, SNR, n_samples=100):
     results_classic = []
     results_noised = []
     ratios_emd = []
@@ -530,8 +530,10 @@ def run_experiment_and_append_images(df, im1, im2, noise_param, n_samples=100):
     results_linear_noised = []
     ratios_linear = []
 
+    noise_param = noise_from_SNR(SNR, signal_power=im1.sum(), res=im1.shape[0])
+
     for i in range(n_samples):
-        im1_post, im2_post, C = create_images_and_costs(im1_base=im1, im2_base=im2, noise=noise_param)
+        im1_noised, im2_noised, im1_post, im2_post, C = create_images_and_costs(im1_base=im1, im2_base=im2, noise=noise_param)
 
         results_classic_add = calc_transport_pot_emd(im1.flatten(), im2.flatten(), C)[1]
         results_noised_add = calc_transport_pot_emd(im1_post.flatten(), im2_post.flatten(), C)[1]
@@ -541,15 +543,16 @@ def run_experiment_and_append_images(df, im1, im2, noise_param, n_samples=100):
         ratios_emd.append(results_classic_add / results_noised_add)
 
         results_linear.append(np.linalg.norm(im1 - im2))
-        # TODO: Change this to be between noised and not posterior images
-        results_linear_noised.append(np.linalg.norm(im1_post - im2_post))
-        ratios_linear.append(np.linalg.norm(im1 - im2) / np.linalg.norm(im1_post - im2_post))
+        results_linear_noised.append(np.linalg.norm(im1_noised - im2_noised))
+        ratios_linear.append(np.linalg.norm(im1 - im2) / np.linalg.norm(im1_noised - im2_noised))
 
     mean_noised, ci_noised = confidence_interval(results_noised)
     mean_linear_noised, ci_linear_noised = confidence_interval(results_linear_noised)
 
     new_row = {
+        'SNR': SNR,
         'Noise_Param': noise_param,
+        'Im_Size': im1.shape[0],  # Assuming square images
         'Distances_Classic': np.mean(results_classic),
         'Distances_Noised': mean_noised,
         'CI_Distances_Noised': ci_noised,
@@ -626,7 +629,7 @@ def create_images_and_costs(im1_base, im2_base, noise, distance_metric='L1'):
     im1_post = im1_post * (mean_distribs / im1_post.sum())
     im2_post = im2_post * (mean_distribs / im2_post.sum())
 
-    return im1_post, im2_post, C
+    return im1_noised, im2_noised, im1_post, im2_post, C
 
 
 def confidence_interval(data, confidence=0.96):
