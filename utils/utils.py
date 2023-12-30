@@ -446,7 +446,8 @@ def calculate_costs(size, distance_metric='L1'):
 
 
 # noinspection PyProtectedMember,PyUnboundLocalVariable
-def run_experiment_and_append(df, res, noise_param, scale_param, SNR=0, num_samples=100, first_center=0.35, first_std=0.1,
+def run_experiment_and_append(df, res, noise_param, scale_param, SNR=0, num_samples=100, first_center=0.35,
+                              first_std=0.1,
                               second_center=0.65, second_std=0.1):
     results_classic = []
     results_noised = []
@@ -467,7 +468,7 @@ def run_experiment_and_append(df, res, noise_param, scale_param, SNR=0, num_samp
                                                                                 second_std=second_std)
 
         signals.append((p ** 2).sum())
-        noise_values.append(((p_noised-p) ** 2).sum())
+        noise_values.append(((p_noised - p) ** 2).sum())
 
         results_classic_add = calc_transport_pot_emd(p, q, C)[1]
         plan_noised, results_noised_add = calc_transport_pot_emd(p_post, q_post, C)
@@ -495,8 +496,8 @@ def run_experiment_and_append(df, res, noise_param, scale_param, SNR=0, num_samp
     signal = np.mean(signals)
     noise = np.mean(noise_values)
 
-    if SNR==0:  # If SNR is not given, calculate it
-        SNR = signal/noise
+    if SNR == 0:  # If SNR is not given, calculate it
+        SNR = signal / noise
     # Create new row
     new_row = {
         'Res': res,
@@ -533,7 +534,8 @@ def run_experiment_and_append_images(df, im1, im2, SNR, n_samples=100):
     noise_param = noise_from_SNR(SNR, signal_power=im1.sum(), res=im1.shape[0])
 
     for i in range(n_samples):
-        im1_noised, im2_noised, im1_post, im2_post, C = create_images_and_costs(im1_base=im1, im2_base=im2, noise=noise_param)
+        im1_noised, im2_noised, im1_post, im2_post, C = create_images_and_costs(im1_base=im1, im2_base=im2,
+                                                                                noise=noise_param)
 
         results_classic_add = calc_transport_pot_emd(im1.flatten(), im2.flatten(), C)[1]
         results_noised_add = calc_transport_pot_emd(im1_post.flatten(), im2_post.flatten(), C)[1]
