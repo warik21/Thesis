@@ -1,10 +1,11 @@
 import numpy as np
-from utils.Classes import TransportResults
+from Classes import TransportResults
 from ott.geometry import pointcloud
 from ott.problems.linear import linear_problem
 from ott.solvers.linear import sinkhorn
 import ot
 import jax.numpy as jnp
+from ot.datasets import make_1D_gauss as gauss
 from scipy.special import logsumexp
 import pandas as pd
 import cvxpy as cp
@@ -124,7 +125,7 @@ def create_constraints_signed(source, target):
     return T_matrix_pos, T_matrix_neg, cons
 
 
-def create_T(source: np.ndarray, target: np.ndarray, cost_matrix: np.ndarray, transport_type: str):
+def create_T(source: np.ndarray, target: np.ndarray, cost_matrix: np.ndarray, transport_type: str = 'standard'):
     """
     This function takes a TransportResults object and updates it according to the transport type.
 
@@ -450,44 +451,17 @@ def calculate_costs(size, distance_metric='L1'):
 def run_experiment_and_append_normal(df, res, SNR, scale_param, num_samples=100, distance_metric='L2',
                                      first_center=0.35, first_std=0.1,
                                      second_center=0.65, second_std=0.1) -> pd.DataFrame:
-    results_classic = []
-    results_noised = []
-    ratios_emd = []
-    results_linear = []
-    results_linear_noised = []
-    ratios_linear = []
 
     # Define the distributions which we will later on noise and normalize them
-    X = np.linspace(0, 1, res)
-    p = norm.pdf(X, scale_param * first_center, scale_param * first_std)
-    p = p / p.sum()
-    q = norm.pdf(X, scale_param * second_center, scale_param * second_std)
-    q = q / q.sum()
+    p = gauss(res, m=scale_param * first_center, s=scale_param * first_std)
+    q = gauss(res, m=scale_param * second_center, s=scale_param * second_std)
 
     signal_power = (p ** 2).sum()
     noise = noise_from_SNR(SNR, signal_power=signal_power, res=res)
 
     C = get_distance_matrix(res, distance_metric)
 
-    for i in range(num_samples):
-        p_noised, p_pos, p_neg = noise_and_split(p, noise)
-        q_noised, q_pos, q_neg = noise_and_split(q, noise)
-
-        p_post, q_post = prep_signed_measures(p_pos, p_neg, q_pos, q_neg)
-
-        plan_classic, results_classic_add = calc_transport_pot_emd(p, q, C)
-        plan_noised, results_noised_add = calc_transport_pot_emd(p_post, q_post, C)
-
-        results_classic.append(results_classic_add)
-        results_noised.append(results_noised_add)
-        ratios_emd.append(results_classic_add / results_noised_add)
-
-        results_linear.append(np.linalg.norm(p - q))
-        results_linear_noised.append(np.linalg.norm(p_noised - q_noised))
-        ratios_linear.append(np.linalg.norm(p - q) / np.linalg.norm(p_noised - q_noised))
-
-    mean_classic, ci_classic = confidence_interval(results_classic)
-    mean_noised, ci_noised = confidence_interval(results_noised)
+    results = perform_noise_and_transport_analysis(p, q, C, noise, num_samples=num_samples)
 
     # Create new row
     new_row = {
@@ -496,14 +470,14 @@ def run_experiment_and_append_normal(df, res, SNR, scale_param, num_samples=100,
         'Scale_Param': scale_param,
         'Signal_Power': signal_power,
         'SNR': SNR,
-        'Distance_Classic': mean_classic,
-        'CI_Distances_Classic': ci_classic,
-        'Distances_Noised': mean_noised,
-        'CI_Distances_Noised': ci_noised,
-        'Ratios_EMD': np.mean(ratios_emd),
-        'Distances_Linear': np.mean(results_linear),
-        'Distances_Linear_Noised': np.mean(results_linear_noised),
-        'Ratios_Linear': np.mean(ratios_linear)
+        'Distance_Classic': results['mean_classic'],
+        'CI_Distances_Classic': results['ci_classic'],
+        'Distances_Noised': results['mean_noised'],
+        'CI_Distances_Noised': results['ci_noised'],
+        'Ratios_EMD': np.mean(results['ratios_emd']),
+        'Distances_Linear':  np.mean(results['results_linear']),
+        'Distances_Linear_Noised': np.mean(results['results_linear_noised']),
+        'Ratios_Linear': np.mean(results['ratios_linear'])
     }
 
     # Append new row to DataFrame
@@ -522,17 +496,44 @@ def run_experiment_and_append(df, p, q, res, SNR, scale_param, num_samples=100, 
     num_samples (int): The number of samples to run the experiment on.
     distance_metric (str): The distance metric to use.
     """
-    results_classic = []
-    results_noised = []
-    ratios_emd = []
-    results_linear = []
-    results_linear_noised = []
-    ratios_linear = []
 
     signal_power = (p ** 2).sum()
     noise = noise_from_SNR(SNR, signal_power=signal_power, res=res)
 
     C = get_distance_matrix(res, distance_metric)
+
+    results = perform_noise_and_transport_analysis(p, q, C, noise, num_samples=num_samples)
+
+    # Create new row
+    new_row = {
+        'Res': res,
+        'Noise_Param': noise,
+        'Scale_Param': scale_param,
+        'Signal_Power': signal_power,
+        'SNR': SNR,
+        'Distance_Classic': results['mean_classic'],
+        'CI_Distances_Classic': results['ci_classic'],
+        'Distances_Noised': results['mean_noised'],
+        'CI_Distances_Noised': results['ci_noised'],
+        'Ratios_EMD': np.mean(results['ratios_emd']),
+        'Distances_Linear':  np.mean(results['results_linear']),
+        'Distances_Linear_Noised': np.mean(results['results_linear_noised']),
+        'Ratios_Linear': np.mean(results['ratios_linear'])
+    }
+
+    # Append new row to DataFrame
+    return df._append(new_row, ignore_index=True)
+
+
+def perform_noise_and_transport_analysis(p, q, C, noise, num_samples=100) -> dict:
+    results = {
+        'classic': [],
+        'noised': [],
+        'ratios_emd': [],
+        'linear': [],
+        'linear_noised': [],
+        'ratios_linear': []
+    }
 
     for i in range(num_samples):
         p_noised, p_pos, p_neg = noise_and_split(p, noise)
@@ -543,45 +544,22 @@ def run_experiment_and_append(df, p, q, res, SNR, scale_param, num_samples=100, 
         plan_classic, results_classic_add = calc_transport_pot_emd(p, q, C)
         plan_noised, results_noised_add = calc_transport_pot_emd(p_post, q_post, C)
 
-        results_classic.append(results_classic_add)
-        results_noised.append(results_noised_add)
-        ratios_emd.append(results_classic_add / results_noised_add)
+        results['classic'].append(results_classic_add)
+        results['noised'].append(results_noised_add)
+        results['ratios_emd'].append(results_classic_add / results_noised_add)
 
-        results_linear.append(np.linalg.norm(p - q))
-        results_linear_noised.append(np.linalg.norm(p_noised - q_noised))
-        ratios_linear.append(np.linalg.norm(p - q) / np.linalg.norm(p_noised - q_noised))
+        results['linear'].append(np.linalg.norm(p - q))
+        results['linear_noised'].append(np.linalg.norm(p_noised - q_noised))
+        results['ratios_linear'].append(np.linalg.norm(p - q) / np.linalg.norm(p_noised - q_noised))
 
-    mean_classic, ci_classic = confidence_interval(results_classic)
-    mean_noised, ci_noised = confidence_interval(results_noised)
+    # Calculate confidence intervals for the results
+    results['mean_classic'], results['ci_classic'] = confidence_interval(results['classic'])
+    results['mean_noised'], results['ci_noised'] = confidence_interval(results['noised'])
 
-    # Create new row
-    new_row = {
-        'Res': res,
-        'Noise_Param': noise,
-        'Scale_Param': scale_param,
-        'Signal_Power': signal_power,
-        'SNR': SNR,
-        'Distance_Classic': mean_classic,
-        'CI_Distances_Classic': ci_classic,
-        'Distances_Noised': mean_noised,
-        'CI_Distances_Noised': ci_noised,
-        'Ratios_EMD': np.mean(ratios_emd),
-        'Distances_Linear': np.mean(results_linear),
-        'Distances_Linear_Noised': np.mean(results_linear_noised),
-        'Ratios_Linear': np.mean(ratios_linear)
-    }
-
-    # Append new row to DataFrame
-    return df._append(new_row, ignore_index=True)
+    return results
 
 
 def run_experiment_and_append_uni(df, res, SNR, scale_param, num_samples=100, distance_metric='L2') -> pd.DataFrame:
-    results_classic = []
-    results_noised = []
-    ratios_emd = []
-    results_linear = []
-    results_linear_noised = []
-    ratios_linear = []
 
     # Define the distributions which we will later on noise and normalize them
     x = np.linspace(0, 1, res)
@@ -595,25 +573,7 @@ def run_experiment_and_append_uni(df, res, SNR, scale_param, num_samples=100, di
 
     C = get_distance_matrix(res, distance_metric)
 
-    for i in range(num_samples):
-        p_noised, p_pos, p_neg = noise_and_split(p, noise)
-        q_noised, q_pos, q_neg = noise_and_split(q, noise)
-
-        p_post, q_post = prep_signed_measures(p_pos, p_neg, q_pos, q_neg)
-
-        plan_classic, results_classic_add = calc_transport_pot_emd(p, q, C)
-        plan_noised, results_noised_add = calc_transport_pot_emd(p_post, q_post, C)
-
-        results_classic.append(results_classic_add)
-        results_noised.append(results_noised_add)
-        ratios_emd.append(results_classic_add / results_noised_add)
-
-        results_linear.append(np.linalg.norm(p - q))
-        results_linear_noised.append(np.linalg.norm(p_noised - q_noised))
-        ratios_linear.append(np.linalg.norm(p - q) / np.linalg.norm(p_noised - q_noised))
-
-    mean_classic, ci_classic = confidence_interval(results_classic)
-    mean_noised, ci_noised = confidence_interval(results_noised)
+    results = perform_noise_and_transport_analysis(p, q, C, noise, num_samples=num_samples)
 
     # Create new row
     new_row = {
@@ -622,14 +582,14 @@ def run_experiment_and_append_uni(df, res, SNR, scale_param, num_samples=100, di
         'Scale_Param': scale_param,
         'Signal_Power': signal_power,
         'SNR': SNR,
-        'Distance_Classic': mean_classic,
-        'CI_Distances_Classic': ci_classic,
-        'Distances_Noised': mean_noised,
-        'CI_Distances_Noised': ci_noised,
-        'Ratios_EMD': np.mean(ratios_emd),
-        'Distances_Linear': np.mean(results_linear),
-        'Distances_Linear_Noised': np.mean(results_linear_noised),
-        'Ratios_Linear': np.mean(ratios_linear)
+        'Distance_Classic': results['mean_classic'],
+        'CI_Distances_Classic': results['ci_classic'],
+        'Distances_Noised': results['mean_noised'],
+        'CI_Distances_Noised': results['ci_noised'],
+        'Ratios_EMD': np.mean(results['ratios_emd']),
+        'Distances_Linear': np.mean(results['results_linear']),
+        'Distances_Linear_Noised': np.mean(results['results_linear_noised']),
+        'Ratios_Linear': np.mean(results['ratios_linear'])
     }
 
     # Append new row to DataFrame
