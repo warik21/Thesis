@@ -541,8 +541,8 @@ def perform_noise_and_transport_analysis(p, q, C, noise, num_samples=100) -> dic
 
         p_post, q_post = prep_signed_measures(p_pos, p_neg, q_pos, q_neg)
 
-        plan_classic, results_classic_add = calc_transport_pot_emd(p, q, C)
-        plan_noised, results_noised_add = calc_transport_pot_emd(p_post, q_post, C)
+        _, results_classic_add = calc_transport_pot_emd(p, q, C)
+        _, results_noised_add = calc_transport_pot_emd(p_post, q_post, C)
 
         results['classic'].append(results_classic_add)
         results['noised'].append(results_noised_add)
@@ -762,3 +762,58 @@ def get_distance_matrix(res, distance_metric='L2'):
             C[it1, it2] = dist(X[it1], X[it2])
 
     return C
+
+
+def perform_noise_and_transport_analysis_wasserstein(p, q, C, noise, num_samples, wasserstein_p=1):
+    """
+    Perform noise and transport analysis for the Wasserstein distance
+    :param wasserstein_p:
+    :param p: source distribution
+    :param q: target distribution
+    :param C: cost matrix
+    :param noise: noise parameter
+    :param num_samples: number of samples
+    :return: noise, transport, noise_std, transport_std
+    """
+    results = {
+        'classic': [],
+        'noised': [],
+        'ratios_emd': [],
+        'linear': [],
+        'linear_noised': [],
+        'ratios_linear': []
+    }
+
+    for i in range(num_samples):
+        p /= p.sum()
+        q /= q.sum()
+        ppf_p = np.cumsum(p)
+        ppf_q = np.cumsum(q)
+
+        p_noised, p_pos, p_neg = noise_and_split(p, noise)
+        q_noised, q_pos, q_neg = noise_and_split(q, noise)
+
+        p_post, q_post = prep_signed_measures(p_pos, p_neg, q_pos, q_neg)
+
+        # p_post /= p_post.sum()
+        # q_post /= q_post.sum()
+        ppf_p_post = np.cumsum(p_post)
+        ppf_q_post = np.cumsum(q_post)
+
+        W_distance_classic = ot.wasserstein_1d(ppf_p, ppf_q, p=wasserstein_p)
+        W_distance_noised = ot.wasserstein_1d(ppf_p_post, ppf_q_post, p=wasserstein_p)
+
+        results['classic'].append(W_distance_classic)
+        results['noised'].append(W_distance_noised)
+        results['ratios_emd'].append(W_distance_noised / W_distance_classic)
+
+        # Linear
+        results['linear'].append(np.linalg.norm(p - q))
+        results['linear_noised'].append(np.linalg.norm(p_noised - q_noised))
+        results['ratios_linear'].append(np.linalg.norm(p_noised - q_noised) / np.linalg.norm(p - q))
+
+    # Compute mean and std
+    results['mean_classic'], results['ci_classic'] = confidence_interval(results['classic'])
+    results['mean_noised'], results['ci_noised'] = confidence_interval(results['noised'])
+
+    return results
