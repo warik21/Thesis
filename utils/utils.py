@@ -1,11 +1,6 @@
 import numpy as np
 from Classes import TransportResults
-from ott.geometry import pointcloud
-from ott.problems.linear import linear_problem
-from ott.solvers.linear import sinkhorn
 import ot
-import jax.numpy as jnp
-from ot.datasets import make_1D_gauss as gauss
 from scipy.special import logsumexp
 import pandas as pd
 import cvxpy as cp
@@ -589,13 +584,12 @@ def get_distance_matrix(res, distance_metric='L2'):
     return C
 
 
-def perform_noise_and_transport_analysis_wasserstein(p, q, C, noise, num_samples, wasserstein_p=1):
+def perform_noise_and_transport_analysis_wasserstein(p, q, noise, num_samples, wasserstein_p=1):
     """
     Perform noise and transport analysis for the Wasserstein distance
     :param wasserstein_p:
     :param p: source distribution
     :param q: target distribution
-    :param C: cost matrix
     :param noise: noise parameter
     :param num_samples: number of samples
     :return: noise, transport, noise_std, transport_std
