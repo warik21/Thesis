@@ -12,90 +12,6 @@ import cvxpy as cp
 from scipy.stats import norm, sem, t
 
 
-def im2mat(img):
-    """Converts an image to matrix (one pixel per line)"""
-    return img.reshape((img.shape[0] * img.shape[1], img.shape[2]))
-
-
-def mat2im(X, shape):
-    """Converts back a matrix to an image"""
-    return X.reshape(shape)
-
-
-def minmax(img):
-    return np.clip(img, 0, 1)
-
-
-def solve_ott(x, y):
-    geom = pointcloud.PointCloud(x, y, epsilon=1e-1)
-    prob = linear_problem.LinearProblem(geom)
-
-    solver = sinkhorn.Sinkhorn(threshold=1e-2, lse_mode=True, max_iterations=1000)
-    out = solver(prob)
-
-    f, g = out.f, out.g
-    f, g = f - np.mean(f), g + np.mean(f)  # center variables, useful if one wants to compare them
-    reg_ot = jnp.where(out.converged, jnp.sum(f) + jnp.sum(g), jnp.nan)
-    return f, g, reg_ot
-
-
-def solve_ot(a, b, x, y, ep, threshold):
-    _, log = ot.sinkhorn(a, b, ot.dist(x, y), ep,
-                         stopThr=threshold, method="sinkhorn_stabilized", log=True, numItermax=1000)
-
-    f, g = ep * log["logu"], ep * log["logv"]
-    f, g = f - np.mean(f), g + np.mean(f)  # center variables, useful if one wants to compare them
-    reg_ot = (np.sum(f * a) + np.sum(g * b) if log["err"][-1] < threshold else np.nan)
-
-    return f, g, reg_ot
-
-
-def create_constraints(source, target):
-    """
-    This function takes two lists as input and creates a matrix variable and a set of constraints.
-
-    Parameters:
-    - source (list): A list of non-negative numbers representing the source distribution.
-    - target (list): A list of non-negative numbers representing the target distribution.
-
-    Returns:
-    - T_matrix (cvxpy.Variable): A matrix variable with shape (len(source), len(target)) representing the transport plan.
-    - cons (list): A list of cvxpy constraints.
-
-    Constraints:
-    - The sum of each column of T_matrix is equal to the corresponding element of target.
-    - The sum of each row of T_matrix is equal to the corresponding element of source.
-    - T_matrix is element-wise non-negative.
-    """
-    T_matrix = cp.Variable((len(source), len(target)), nonneg=True)
-
-    # noinspection PyTypeChecker
-    cons = [cp.sum(T_matrix, axis=0) == target,  # column sum should be what we move to the pixel the column represents
-            cp.sum(T_matrix, axis=1) == source,  # row sum should be what we move from the pixel the row represents
-            T_matrix >= 0]  # all elements of T_matrix should be non-negative
-
-    return T_matrix, cons
-
-
-def create_constraints_lifted(source, target):
-    """
-    This function takes two real measures as input and creates a matrix variable and a set of constraints. While
-    considering a lifting parameter p which is used to normalize the program.
-    """
-    T_matrix = cp.Variable((len(source), len(target)), nonneg=True)
-    # alpha = cp.Variable(nonneg=True)  # lifting parameter
-    alpha = -min(min(source), min(target)) + 1  # lifting parameter
-
-    cons = [cp.sum(T_matrix, axis=0) == target + alpha,
-            # column sum should be what we move to the pixel the column represents
-            cp.sum(T_matrix, axis=1) == source + alpha,
-            # row sum should be what we move from the pixel the row represents
-            cp.sum(T_matrix) <=
-            T_matrix >= 0]  # all elements of the transport plan should be non-negative
-
-    return T_matrix, alpha, cons
-
-
 def solve_ot_dual(c, mu, nu):
     n, m = c.shape  # n and m are the dimensions of cost matrix c
     phi = cp.Variable(n)
@@ -111,18 +27,47 @@ def solve_ot_dual(c, mu, nu):
     return phi.value, psi.value, problem.value
 
 
-def create_constraints_signed(source, target):
-    T_matrix_pos = cp.Variable((len(source), len(target)), nonneg=True)
-    T_matrix_neg = cp.Variable((len(source), len(target)), nonneg=True)
+def create_constraints_general(case, source, target):
+    """
+    Creates a matrix variable and a set of constraints based on the specified case.
 
-    cons = [cp.sum(T_matrix_pos - T_matrix_neg, axis=0) == target,
-            # column sum should be what we move to the pixel the column represents
-            cp.sum(T_matrix_pos - T_matrix_neg, axis=1) == source,
-            # row sum should be what we move from the pixel the row represents
-            T_matrix_pos >= 0,  # all elements of both matrices should be non-negative
-            T_matrix_neg >= 0]
+    Parameters:
+    - case (str): The case to use ('normal', 'lifted', or 'signed').
+    - source (list): A list of non-negative numbers representing the source distribution.
+    - target (list): A list of non-negative numbers representing the target distribution.
 
-    return T_matrix_pos, T_matrix_neg, cons
+    Returns:
+    - T_matrix (cp.Variable or tuple of cp.Variable): A matrix variable or tuple of variables representing the transport plan.
+    - cons (list): A list of cvxpy constraints.
+    - alpha (float, optional): Lifting parameter for 'lifted' case.
+    """
+    if case == 'normal':
+        T_matrix = cp.Variable((len(source), len(target)), nonneg=True)
+        cons = [cp.sum(T_matrix, axis=0) == target,
+                cp.sum(T_matrix, axis=1) == source,
+                T_matrix >= 0]
+
+    elif case == 'lifted':
+        T_matrix = cp.Variable((len(source), len(target)), nonneg=True)
+        alpha = -min(min(source), min(target)) + 1
+        cons = [cp.sum(T_matrix, axis=0) == target + alpha,
+                cp.sum(T_matrix, axis=1) == source + alpha,
+                T_matrix >= 0]
+        return T_matrix, alpha, cons
+
+    elif case == 'signed':
+        T_matrix_pos = cp.Variable((len(source), len(target)), nonneg=True)
+        T_matrix_neg = cp.Variable((len(source), len(target)), nonneg=True)
+        cons = [cp.sum(T_matrix_pos - T_matrix_neg, axis=0) == target,
+                cp.sum(T_matrix_pos - T_matrix_neg, axis=1) == source,
+                T_matrix_pos >= 0,
+                T_matrix_neg >= 0]
+        return T_matrix_pos, T_matrix_neg, cons
+
+    else:
+        raise ValueError("Invalid case specified")
+
+    return T_matrix, cons
 
 
 def create_T(source: np.ndarray, target: np.ndarray, cost_matrix: np.ndarray, transport_type: str = 'standard'):
@@ -131,7 +76,7 @@ def create_T(source: np.ndarray, target: np.ndarray, cost_matrix: np.ndarray, tr
 
     """
     if transport_type == 'standard':
-        p, constraints = create_constraints(source, target)
+        p, constraints = create_constraints_general('normal', source, target)
         obj = cp.Minimize(cp.sum(cp.multiply(p, cost_matrix)))
         prob = cp.Problem(obj, constraints)
         prob.solve()
@@ -139,7 +84,7 @@ def create_T(source: np.ndarray, target: np.ndarray, cost_matrix: np.ndarray, tr
                                 source_distribution=source, target_distribution=target)
 
     elif transport_type == 'lifted':
-        T, alpha, constraints = create_constraints_lifted(source.flatten(), target.flatten())
+        T, alpha, constraints = create_constraints_general('lifted', source.flatten(), target.flatten())
         obj = cp.Minimize(cp.sum(cp.multiply(T, cost_matrix)))
         prob = cp.Problem(obj, constraints)
         prob.solve()
@@ -147,7 +92,7 @@ def create_T(source: np.ndarray, target: np.ndarray, cost_matrix: np.ndarray, tr
                                 source_distribution=source, target_distribution=target)
 
     elif transport_type == 'signed':
-        T_pos, T_neg, constraints = create_constraints_signed(source.flatten(), target.flatten())
+        T_pos, T_neg, constraints = create_constraints_general('signed', source.flatten(), target.flatten())
         obj = cp.Minimize(cp.sum(cp.multiply(T_pos, cost_matrix)) + cp.sum(cp.multiply(T_neg, cost_matrix)))
         prob = cp.Problem(obj, constraints)
         prob.solve()
@@ -183,52 +128,6 @@ def calc_transport_cvxpy(source: np.ndarray, target: np.ndarray, cost_matrix: np
     T = create_T(source, target, cost_matrix, transport_type)
 
     return T.transport_plan, T.transported_mass
-
-
-def calc_lifted_transport_cvxpy(source, target, cost_matrix):
-    """
-    This function takes two real measures and a cost matrix as input to solve a linear transport problem.
-
-    Parameters:
-    - source (list): A list of non-negative numbers representing the source distribution.
-    - target (list): A list of non-negative numbers representing the target distribution.
-    - cost_matrix (numpy.ndarray): A matrix representing the transport cost from each source to each target.
-
-    Returns:
-    - (float, numpy.ndarray): A tuple containing the optimal transport cost and the optimal transport plan.
-
-    The linear transport problem being solved is:
-    Minimize (sum of element-wise product of transport plan and cost matrix)
-    Subject to constraints:
-    - The sum of each column of transport plan is equal to the corresponding element of target.
-    - The sum of each row of transport plan is equal to the corresponding element of source.
-    - transport plan is element-wise non-negative.
-    """
-    T, alpha, constraints = create_constraints_lifted(source, target)
-
-    obj = cp.Minimize(cp.sum(cp.multiply(T, cost_matrix)))
-
-    prob = cp.Problem(obj, constraints)
-
-    prob.solve()
-
-    return prob.value, T.value
-
-
-def calc_transport_pot_sinkhorn(source, target, costs, reg_param=1.e-1) -> (np.ndarray, float, np.ndarray, np.ndarray):
-    """
-    Implementation for solving ot using sinkhorn, including log-domain stabilization
-    Also works on Unbalanced data
-
-    source(np.ndarray): The source distribution, p
-    target(np.ndarray): The target distribution, q
-    costs(np.ndarray): The cost matrix
-    reg_param(float): Regularization parameter, epsilon in the literature
-    """
-    Transport_plan = ot.sinkhorn(source.flatten(), target.flatten(), costs, reg=reg_param)
-    Transport_cost = np.sum(Transport_plan * costs)
-
-    return Transport_plan, Transport_cost
 
 
 def calc_transport_pot_emd(source, target, costs) -> (np.ndarray, float):
@@ -447,43 +346,6 @@ def calculate_costs(size, distance_metric='L1'):
         return costs
 
 
-# noinspection PyProtectedMember,PyUnboundLocalVariable
-def run_experiment_and_append_normal(df, res, SNR, scale_param, num_samples=100, distance_metric='L2',
-                                     first_center=0.35, first_std=0.1,
-                                     second_center=0.65, second_std=0.1) -> pd.DataFrame:
-
-    # Define the distributions which we will later on noise and normalize them
-    p = gauss(res, m=scale_param * first_center, s=scale_param * first_std)
-    q = gauss(res, m=scale_param * second_center, s=scale_param * second_std)
-
-    signal_power = (p ** 2).sum()
-    noise = noise_from_SNR(SNR, signal_power=signal_power, res=res)
-
-    C = get_distance_matrix(res, distance_metric)
-
-    results = perform_noise_and_transport_analysis(p, q, C, noise, num_samples=num_samples)
-
-    # Create new row
-    new_row = {
-        'Res': res,
-        'Noise_Param': noise,
-        'Scale_Param': scale_param,
-        'Signal_Power': signal_power,
-        'SNR': SNR,
-        'Distance_Classic': results['mean_classic'],
-        'CI_Distances_Classic': results['ci_classic'],
-        'Distances_Noised': results['mean_noised'],
-        'CI_Distances_Noised': results['ci_noised'],
-        'Ratios_EMD': np.mean(results['ratios_emd']),
-        'Distances_Linear':  np.mean(results['results_linear']),
-        'Distances_Linear_Noised': np.mean(results['results_linear_noised']),
-        'Ratios_Linear': np.mean(results['ratios_linear'])
-    }
-
-    # Append new row to DataFrame
-    return df._append(new_row, ignore_index=True)
-
-
 def run_experiment_and_append(df, p, q, res, SNR, scale_param, num_samples=100, distance_metric='L2') -> pd.DataFrame:
     """
     This function runs an experiment and appends the results to a DataFrame.
@@ -557,43 +419,6 @@ def perform_noise_and_transport_analysis(p, q, C, noise, num_samples=100) -> dic
     results['mean_noised'], results['ci_noised'] = confidence_interval(results['noised'])
 
     return results
-
-
-def run_experiment_and_append_uni(df, res, SNR, scale_param, num_samples=100, distance_metric='L2') -> pd.DataFrame:
-
-    # Define the distributions which we will later on noise and normalize them
-    x = np.linspace(0, 1, res)
-    p = np.where(x < 0.5, 2.0, 0)
-    p = p / p.sum()
-    q = np.where(x >= 0.5, 2.0, 0)
-    q = q / q.sum()
-
-    signal_power = (p ** 2).sum()
-    noise = noise_from_SNR(SNR, signal_power=signal_power, res=res)
-
-    C = get_distance_matrix(res, distance_metric)
-
-    results = perform_noise_and_transport_analysis(p, q, C, noise, num_samples=num_samples)
-
-    # Create new row
-    new_row = {
-        'Res': res,
-        'Noise_Param': noise,
-        'Scale_Param': scale_param,
-        'Signal_Power': signal_power,
-        'SNR': SNR,
-        'Distance_Classic': results['mean_classic'],
-        'CI_Distances_Classic': results['ci_classic'],
-        'Distances_Noised': results['mean_noised'],
-        'CI_Distances_Noised': results['ci_noised'],
-        'Ratios_EMD': np.mean(results['ratios_emd']),
-        'Distances_Linear': np.mean(results['results_linear']),
-        'Distances_Linear_Noised': np.mean(results['results_linear_noised']),
-        'Ratios_Linear': np.mean(results['ratios_linear'])
-    }
-
-    # Append new row to DataFrame
-    return df._append(new_row, ignore_index=True)
 
 
 def run_experiment_and_append_images(df, im1, im2, SNR, n_samples=100):
