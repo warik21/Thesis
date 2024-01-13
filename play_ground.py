@@ -1,102 +1,106 @@
-import numpy as np
-import ot
-import time
-import matplotlib.pyplot as plt
 import sys
+
+import jax.numpy as jnp
+from jax import random
+from ot.datasets import make_1D_gauss as gauss
+from ott.geometry import costs, pointcloud
+from ott.problems.linear import linear_problem
+from ott.solvers.linear.univariate import UnivariateSolver
 
 sys.path.append('C:/Users/eriki/OneDrive/Documents/all_folder/Thesis/Thesis/utils')
 from utils.utils import *
-from utils.Visualizations import *
-from scipy.stats import norm, sem, t
-from ot.datasets import make_1D_gauss as gauss
-
-res = 100
-lin_space = np.linspace(0, 1, res)
-x = gauss(res, 35, 10)
-y = gauss(res, 65, 10)
-
-M = ot.dist(lin_space.reshape((res, 1)), lin_space.reshape((res, 1)),
-            metric='euclidean')  # can be euclidean for L1 and sqeuclidean for L2
-M /= M.max()
-
-noise_values = np.logspace(start=-4, stop=1, num=31)
-noise_param = noise_values[0]
-x_noised, x_pos, x_neg = noise_and_split(x, noise_param)
-y_noised, y_pos, y_neg = noise_and_split(y, noise_param)
 
 
-def perform_noise_and_transport_analysis_wasserstein(p_normal, q_normal, p_unif, q_unif, noise, num_samples,
-                                                     wasserstein_p=1):
-    """
-    Perform the noise and transport analysis for the Wasserstein distance.
-    :param p_normal: source distribution
-    :param q_normal: target distribution
-    :param p_unif: source distribution
-    :param q_unif: target distribution
-    :param C: cost matrix
-    :param noise: noise parameter
-    :param num_samples: number of samples
-    :param wasserstein_p: p parameter for the Wasserstein distance
-    :return: dictionary with the results
-    """
-    results = {
-        'classic_normal': [],
-        'noised_normal': [],
-        'ratios_emd_normal': [],
-        'classic_unif': [],
-        'noised_unif': [],
-        'ratios_emd_unif': [],
-        'linear': [],
-        'linear_noised': [],
-        'ratios_linear': [],
+class AbsoluteDifferenceCost(costs.TICost):
+    def h(self, x: jnp.ndarray) -> jnp.ndarray:
+        return jnp.abs(x)
+
+
+class SquareDifferenceTICost(costs.TICost):
+    def h(self, x: jnp.ndarray) -> jnp.ndarray:
+        return x ** 2
+
+
+def run_experiment_and_append(df, res, SNR, num_samples=100, wasserstein_p=1,
+                              first_center=0.35, first_std=0.1,
+                              second_center=0.65, second_std=0.1) -> pd.DataFrame:
+    # Generate Gaussian distributions
+    p = gauss(res, m=res * first_center, s=res * first_std)
+    q = gauss(res, m=res * second_center, s=res * second_std)
+
+    # Calculate signal power and determine noise level
+    signal_power = (p ** 2).sum()
+    noise_level = noise_from_SNR(SNR, signal_power=signal_power, res=res)
+
+    # Compute original and noised Wasserstein distances
+    original_distance = wasserstein_distance(p, q, wasserstein_p)
+
+    # Add noise to the distributions
+    key1, key2 = random.split(random.PRNGKey(0), 2)
+    noisy_p = p + noise_level * random.normal(key1, p.shape)
+    noisy_q = q + noise_level * random.normal(key2, q.shape)
+    noised_distance = wasserstein_distance(noisy_p, noisy_q, wasserstein_p)
+
+    p_pos = noisy_p[noisy_p >= 0]
+    p_neg = noisy_p[noisy_p < 0]
+    q_pos = noisy_q[noisy_q >= 0]
+    q_neg = noisy_q[noisy_q < 0]
+
+    p_post = p_pos + q_neg
+    q_post = q_pos + p_neg
+
+    post_process_distance = wasserstein_distance(p_post, q_post, wasserstein_p)
+
+    # Prepare the data to be appended
+    new_row = {
+        'Res': res,
+        'SNR': SNR,
+        'Signal_Power': signal_power,
+        'Noise_Level': noise_level,
+        'Wasserstein_p': wasserstein_p,
+        'Distance_Original': original_distance,
+        'Distance_Noised': noised_distance,
+        'Distance_Post': post_process_distance,
+        'Ratio': original_distance / noised_distance
     }
 
-    for i in range(num_samples):
-        ppf_p_normal = np.cumsum(p_normal)
-        ppf_q_normal = np.cumsum(q_normal)
+    # Append new data to DataFrame
+    return df._append(new_row, ignore_index=True)
 
-        ppf_p_unif = np.cumsum(p_unif)
-        ppf_q_unif = np.cumsum(q_unif)
 
-        # Normal
-        p_normal_noised, p_normal_pos, p_normal_neg = noise_and_split(p_normal, noise)
-        q_normal_noised, q_normal_pos, q_normal_neg = noise_and_split(q_normal, noise)
-        p_normal_post, q_normal_post = prep_signed_measures(p_normal_pos, p_normal_neg, q_normal_pos, q_normal_neg)
-        ppf_p_normal_post = np.cumsum(p_normal_post)
-        ppf_q_normal_post = np.cumsum(q_normal_post)
+def compute_cdf(arr):
+    # Normalize the array to sum to 1 and compute the cumulative sum to get the CDF
+    return jnp.cumsum(arr) / jnp.sum(arr)
 
-        # Uniform
-        p_unif_noised, p_unif_pos, p_unif_neg = noise_and_split(p_unif, noise)
-        q_unif_noised, q_unif_pos, q_unif_neg = noise_and_split(q_unif, noise)
-        p_unif_post, q_unif_post = prep_signed_measures(p_unif_pos, p_unif_neg, q_unif_pos, q_unif_neg)
-        ppf_p_unif_post = np.cumsum(p_unif_post)
-        ppf_q_unif_post = np.cumsum(q_unif_post)
 
-        # Compute transport
-        W_distance_classic_normal = ot.wasserstein_1d(ppf_p_normal, ppf_q_normal, p=wasserstein_p)
-        W_distance_noised_normal = ot.wasserstein_1d(ppf_p_normal_post, ppf_q_normal_post, p=wasserstein_p)
+class PWassersteinCost(costs.TICost):
+    def __init__(self, p_value=1):
+        self.p_value = p_value
 
-        W_distance_classic_unif = ot.wasserstein_1d(ppf_p_unif, ppf_q_unif, p=wasserstein_p)
-        W_distance_noised_unif = ot.wasserstein_1d(ppf_p_unif_post, ppf_q_unif_post, p=wasserstein_p)
+    def pairwise(self, x: jnp.ndarray, y: jnp.ndarray) -> jnp.ndarray:
+        # Compute the p-th power of absolute differences
+        return jnp.abs(x - y) ** self.p_value
 
-        results['classic_normal'].append(W_distance_classic_normal)
-        results['noised_normal'].append(W_distance_noised_normal)
-        results['ratios_emd_normal'].append(W_distance_noised_normal / W_distance_classic_normal)
 
-        results['classic_unif'].append(W_distance_classic_unif)
-        results['noised_unif'].append(W_distance_noised_unif)
-        results['ratios_emd_unif'].append(W_distance_noised_unif / W_distance_classic_unif)
+def wasserstein_distance(p, q, wasserstein_p=1):
+    # Compute the CDFs for p and q
+    cdf_p = compute_cdf(p)
+    cdf_q = compute_cdf(q)
 
-        # Linear
-        results['linear'].append(np.linalg.norm(p_normal - q_normal))
-        results['linear_noised'].append(np.linalg.norm(p_normal_noised - q_normal_noised))
-        results['ratios_linear'].append(np.linalg.norm(p_normal_noised - q_normal_noised) / np.linalg.norm(p_normal - q_normal))
+    # Function to compute the Wasserstein distance
+    if wasserstein_p == 1:
+        cost_fn = AbsoluteDifferenceCost()  # Use the appropriate cost function here
+    elif wasserstein_p == 2:
+        cost_fn = SquareDifferenceTICost()
+    else:
+        raise ValueError('Invalid distance metric, only supporting W1 and W2 at the moment')
+    geom = pointcloud.PointCloud(cdf_p[:, jnp.newaxis], cdf_q[:, jnp.newaxis], cost_fn=cost_fn)
+    prob = linear_problem.LinearProblem(geom)
+    solver = UnivariateSolver()
+    result = solver(prob)
 
-    # Compute mean and std
-    results['mean_normal'], results['ci_normal'] = confidence_interval(results['classic_normal'])
-    results['mean_normal_noised'], results['ci_normal_noised'] = confidence_interval(results['noised_normal'])
-
-    results['mean_unif'], results['ci_unif'] = confidence_interval(results['classic_unif'])
-    results['mean_unif_noised'], results['ci_unif_noised'] = confidence_interval(results['noised_unif'])
-
-    return results
+    # Return the Wasserstein distance raised to the power of 1/wasserstein_p
+    if wasserstein_p == 1:
+        return result.ot_costs.sum()
+    elif wasserstein_p == 2:
+        return jnp.sqrt(result.ot_costs.sum())
