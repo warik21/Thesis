@@ -1,5 +1,5 @@
 import numpy as np
-from Classes import TransportResults
+from utils.Classes import TransportResults
 import ot
 from scipy.special import logsumexp
 import pandas as pd
