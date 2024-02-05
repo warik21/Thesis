@@ -373,8 +373,8 @@ def run_experiment_and_append(df, p, q, res, SNR, scale_param, num_samples=100, 
         'Distances_Noised': results['mean_noised'],
         'CI_Distances_Noised': results['ci_noised'],
         'Ratios_EMD': np.mean(results['ratios_emd']),
-        'Distances_Linear':  np.mean(results['results_linear']),
-        'Distances_Linear_Noised': np.mean(results['results_linear_noised']),
+        'Distances_Linear':  np.mean(results['linear']),
+        'Distances_Linear_Noised': np.mean(results['linear_noised']),
         'Ratios_Linear': np.mean(results['ratios_linear'])
     }
 
