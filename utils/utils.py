@@ -416,7 +416,17 @@ def perform_noise_and_transport_analysis(p, q, C, noise, num_samples=100) -> dic
     return results
 
 
-def run_experiment_and_append_images(df, im1, im2, SNR, n_samples=100):
+def run_experiment_and_append_images(df, im1, im2, SNR, distance_metric='L2', n_samples=100):
+    """
+    This function runs an experiment and appends the results to a DataFrame.
+    :param distance_metric:
+    :param df:
+    :param im1:
+    :param im2:
+    :param SNR:
+    :param n_samples:
+    :return:
+    """
     results_classic = []
     results_noised = []
     ratios_emd = []
@@ -428,7 +438,7 @@ def run_experiment_and_append_images(df, im1, im2, SNR, n_samples=100):
 
     for i in range(n_samples):
         im1_noised, im2_noised, im1_post, im2_post, C = create_images_and_costs(im1_base=im1, im2_base=im2,
-                                                                                noise=noise_param)
+                                                                                noise=noise_param, distance_metric=distance_metric)
 
         results_classic_add = calc_transport_pot_emd(im1.flatten(), im2.flatten(), C)[1]
         results_noised_add = calc_transport_pot_emd(im1_post.flatten(), im2_post.flatten(), C)[1]
