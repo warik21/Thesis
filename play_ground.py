@@ -1,106 +1,49 @@
+import os
+import cv2
+import glob
+import itertools
 import sys
 
-import jax.numpy as jnp
-from jax import random
-from ot.datasets import make_1D_gauss as gauss
-from ott.geometry import costs, pointcloud
-from ott.problems.linear import linear_problem
-from ott.solvers.linear.univariate import UnivariateSolver
-
-sys.path.append('C:/Users/eriki/OneDrive/Documents/all_folder/Thesis/Thesis/utils')
+utils_path = os.path.abspath(r"C:\Users\eriki\OneDrive\Documents\all_folder\Thesis\Thesis")
+if utils_path not in sys.path:
+    sys.path.append(utils_path)
 from utils.utils import *
 
+dotmark_pictures_path = "..\\DOTmark_1.0\\Pictures\\"
+full_path = os.path.join(os.getcwd(), dotmark_pictures_path)
+# resolutions = [32, 64, 128, 256, 512]
+resolutions = [32]
+image_numbers = ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10']
+SNR_values = np.logspace(start=3, stop=-2, num=31)
+df_im_l1 = pd.DataFrame()
 
-class AbsoluteDifferenceCost(costs.TICost):
-    def h(self, x: jnp.ndarray) -> jnp.ndarray:
-        return jnp.abs(x)
+# Define the pattern to match all items in the directory
+categories_pattern = os.path.join(dotmark_pictures_path, "*")
+# Use a list comprehension to filter only directories
+category_dirs = [path for path in glob.glob(categories_pattern) if os.path.isdir(path)]
+# Extract just the category names from the full paths
+category_names = [os.path.basename(path) for path in category_dirs]
 
+pairs = list(itertools.combinations(image_numbers, 2))
 
-class SquareDifferenceTICost(costs.TICost):
-    def h(self, x: jnp.ndarray) -> jnp.ndarray:
-        return x ** 2
+for category in category_names:
+    category_dir = os.path.join(full_path, category)
+    print(f"Processing category: {category}")
+    for resolution in resolutions:
+        for SNR in SNR_values:
+            for image_pair in pairs:
+                # Here we would like to noise and compare each pair of images. We would want to create a confusion matrix
+                # We essentially want this step to output 3 things:
+                # Conf_mat(I1_noised,I2_noised)
+                # Conf_mat(I1, I2)
+                # emd(I, I_tilde) for every image, only thing to think about is whether we want to noise at every stage or not.
+                path_im1 = os.path.join(category_dir, f"picture{resolution}_10{image_pair[0]}.png")
+                im1 = cv2.imread(path_im1, cv2.IMREAD_GRAYSCALE).astype(np.float32)
+                im1 = cv2.resize(im1, (resolution, resolution))
+                path_im2 = os.path.join(category_dir, f"picture{resolution}_10{image_pair[1]}.png")
+                im2 = cv2.imread(path_im1, cv2.IMREAD_GRAYSCALE).astype(np.float32)
+                im2 = cv2.resize(im2, (resolution, resolution))
 
-
-def run_experiment_and_append(df, res, SNR, num_samples=100, wasserstein_p=1,
-                              first_center=0.35, first_std=0.1,
-                              second_center=0.65, second_std=0.1) -> pd.DataFrame:
-    # Generate Gaussian distributions
-    p = gauss(res, m=res * first_center, s=res * first_std)
-    q = gauss(res, m=res * second_center, s=res * second_std)
-
-    # Calculate signal power and determine noise level
-    signal_power = (p ** 2).sum()
-    noise_level = noise_from_SNR(SNR, signal_power=signal_power, res=res)
-
-    # Compute original and noised Wasserstein distances
-    original_distance = wasserstein_distance(p, q, wasserstein_p)
-
-    # Add noise to the distributions
-    key1, key2 = random.split(random.PRNGKey(0), 2)
-    noisy_p = p + noise_level * random.normal(key1, p.shape)
-    noisy_q = q + noise_level * random.normal(key2, q.shape)
-    noised_distance = wasserstein_distance(noisy_p, noisy_q, wasserstein_p)
-
-    p_pos = noisy_p[noisy_p >= 0]
-    p_neg = noisy_p[noisy_p < 0]
-    q_pos = noisy_q[noisy_q >= 0]
-    q_neg = noisy_q[noisy_q < 0]
-
-    p_post = p_pos + q_neg
-    q_post = q_pos + p_neg
-
-    post_process_distance = wasserstein_distance(p_post, q_post, wasserstein_p)
-
-    # Prepare the data to be appended
-    new_row = {
-        'Res': res,
-        'SNR': SNR,
-        'Signal_Power': signal_power,
-        'Noise_Level': noise_level,
-        'Wasserstein_p': wasserstein_p,
-        'Distance_Original': original_distance,
-        'Distance_Noised': noised_distance,
-        'Distance_Post': post_process_distance,
-        'Ratio': original_distance / noised_distance
-    }
-
-    # Append new data to DataFrame
-    return df._append(new_row, ignore_index=True)
-
-
-def compute_cdf(arr):
-    # Normalize the array to sum to 1 and compute the cumulative sum to get the CDF
-    return jnp.cumsum(arr) / jnp.sum(arr)
-
-
-class PWassersteinCost(costs.TICost):
-    def __init__(self, p_value=1):
-        self.p_value = p_value
-
-    def pairwise(self, x: jnp.ndarray, y: jnp.ndarray) -> jnp.ndarray:
-        # Compute the p-th power of absolute differences
-        return jnp.abs(x - y) ** self.p_value
-
-
-def wasserstein_distance(p, q, wasserstein_p=1):
-    # Compute the CDFs for p and q
-    cdf_p = compute_cdf(p)
-    cdf_q = compute_cdf(q)
-
-    # Function to compute the Wasserstein distance
-    if wasserstein_p == 1:
-        cost_fn = AbsoluteDifferenceCost()  # Use the appropriate cost function here
-    elif wasserstein_p == 2:
-        cost_fn = SquareDifferenceTICost()
-    else:
-        raise ValueError('Invalid distance metric, only supporting W1 and W2 at the moment')
-    geom = pointcloud.PointCloud(cdf_p[:, jnp.newaxis], cdf_q[:, jnp.newaxis], cost_fn=cost_fn)
-    prob = linear_problem.LinearProblem(geom)
-    solver = UnivariateSolver()
-    result = solver(prob)
-
-    # Return the Wasserstein distance raised to the power of 1/wasserstein_p
-    if wasserstein_p == 1:
-        return result.ot_costs.sum()
-    elif wasserstein_p == 2:
-        return jnp.sqrt(result.ot_costs.sum())
+                df_im_l1 = run_experiment_and_append_images(df=df_im_l1, im1=im1, im2=im2, SNR=SNR,
+                                                            distance_metric='L2', n_samples=2)
+print('Done')
