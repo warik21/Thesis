@@ -125,7 +125,7 @@ def calc_transport_cvxpy(source: np.ndarray, target: np.ndarray, cost_matrix: np
     return T.transport_plan, T.transported_mass
 
 
-def calc_transport_pot_emd(source, target, costs) -> (np.ndarray, float):
+def calc_transport_pot_emd(source, target, costs) -> (np.ndarray, float): # type: ignore
     """
     Implementation for solving ot using emd
     Also works on Unbalanced data
@@ -141,7 +141,7 @@ def calc_transport_pot_emd(source, target, costs) -> (np.ndarray, float):
 
 
 def unbalanced_sinkhorn(alpha: np.ndarray, beta: np.ndarray, costs: np.ndarray, eps=1.e-1,
-                        max_iter=1000, return_plan=False) -> (np.ndarray, np.ndarray, np.ndarray):
+                        max_iter=1000, return_plan=False) -> (np.ndarray, np.ndarray, np.ndarray): # type: ignore
     """
     This is the slow way, since it does not use the matrix-vector product formulation. The upside of this approach is
     That it is more stable.
@@ -222,7 +222,7 @@ def create_d_phi(source: np.ndarray, target: np.ndarray, ro: float) -> cp.Variab
     return D_phi
 
 
-def split_signed_measure(src: np.ndarray) -> (np.ndarray, np.ndarray):
+def split_signed_measure(src: np.ndarray) -> (np.ndarray, np.ndarray): # type: ignore
     """
     This function splits the source measure into positive and negative parts.
     :param src: distribution to split
