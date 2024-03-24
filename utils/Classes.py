@@ -2,6 +2,8 @@
 from typing import Optional
 import numpy as np
 from pydantic import BaseModel
+import cv2
+from utils import *
 
 
 class TransportResults(BaseModel):

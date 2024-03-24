@@ -1,5 +1,7 @@
 import numpy as np
-from utils.Classes import TransportResults
+import sys
+sys.path.append('C:/Users/eriki/OneDrive/Documents/all_folder/Thesis/Thesis/utils')
+from Classes import TransportResults
 import ot
 from scipy.special import logsumexp
 import pandas as pd
@@ -323,20 +325,19 @@ def calculate_costs(size, distance_metric='L1'):
 
     # 2D case:
     elif len(size) == 2:
-        m, n = size
-        size_1d = m * n
-
-        coords = np.array([[i, j] for i in range(m) for j in range(n)])
-        delta = coords[:, np.newaxis, :] - coords[np.newaxis, :, :]
-
+        I, J = np.indices(size)
+        
+        # Flatten the indices to create 1D arrays of x and y coordinates
+        I_flat = I.flatten()
+        J_flat = J.flatten()
+        
+        # Calculate distances using broadcasting
         if distance_metric == 'L1':
-            distances = np.sum(np.abs(delta), axis=2)
+            costs = np.sqrt((I_flat[:, None] - I_flat[None, :]) ** 2 + (J_flat[:, None] - J_flat[None, :]) ** 2)
         elif distance_metric == 'L2':
-            distances = np.sqrt(np.sum(delta ** 2, axis=2))
+            costs = (I_flat[:, None] - I_flat[None, :]) ** 2 + (J_flat[:, None] - J_flat[None, :]) ** 2
         else:
             raise ValueError('Invalid distance metric. Must be either "L1" or "L2".')
-
-        costs = distances.reshape((size_1d, size_1d))
 
         return costs
 
@@ -646,3 +647,86 @@ def perform_noise_and_transport_analysis_wasserstein(p, q, noise, num_samples, w
     results['mean_noised'], results['ci_noised'] = confidence_interval(results['noised'])
 
     return results
+
+
+def fourier_transform_shift(im) -> np.ndarray:
+    """
+    This function takes an image and returns its Fourier transform.
+    :param im(np.ndarray): The image to transform (2D array).
+    :return: dft_mag_shifted(np.ndarray): The shifted magnitude of the Fourier transform.
+    """
+    im = np.copy(im)
+    # Normalize
+    im = im / im.sum()
+    # Fourier transform
+    DFT_im = np.fft.fft2(im)
+    DFT_mag = np.abs(DFT_im)
+    DFT_mag_shifted = np.fft.fftshift(DFT_mag)
+
+    return DFT_mag_shifted
+
+
+def Fourier1(mu, nu, T=2 * np.pi) -> float:
+    mu_hat = np.fft.fft2(mu)
+    nu_hat = np.fft.fft2(nu)
+    m, n = mu.shape
+    dxdy = (m / T) * (n / T)
+    
+    integral = 0
+
+    for y in range(n):
+        for x in range(m):
+            if x == 0 and y == 0:
+                continue
+            
+            kx = x * (2 * np.pi / m)
+            ky = y * (2 * np.pi / n)
+
+            # Compute the squared magnitude of the frequency vector
+            k_squared = kx**2 + ky**2
+
+            # Increment the integral value
+            diff = mu_hat[y, x] - nu_hat[y, x]
+            integral += (np.abs(diff) ** 2) / k_squared * dxdy
+
+    integral = np.sqrt(((1 / T) ** 2) * integral)
+
+    return integral
+
+def Fourier2(a, b, T=2*np.pi) -> float:
+    m, n = np.shape(a)
+    dxdy = (T / m) * (T / n)
+
+    # Normalize a and b
+    a /= np.sum(a)
+    b /= np.sum(b)
+
+    # Calculate expected values and translation vector efficiently
+    expected_value_a = np.array([np.sum(a * np.arange(m)[:, None]), np.sum(a * np.arange(n))])
+    expected_value_b = np.array([np.sum(b * np.arange(m)[:, None]), np.sum(b * np.arange(n))])
+    translation_vector = expected_value_a - expected_value_b
+
+    # Perform FFT
+    fa = np.fft.fft2(a)
+    fb = np.fft.fft2(b)
+
+    # Calculate distance considering the translation vector
+    integral = 0
+    for y in range(n):
+        for x in range(m):
+            # Avoid division by zero for the zero frequency component
+            if x == 0 and y == 0:
+                continue
+
+            kx = x * T / m
+            ky = y * T / n
+
+            k_squared = kx ** 2 + ky ** 2
+            trasl = np.exp((2 * np.pi * 1j * translation_vector[0] * x) / m) * np.exp(
+                (2 * np.pi * 1j * translation_vector[1] * y) / n)
+            integral += ((np.abs(fa[x, y] - fb[x, y] * trasl)) ** 2) / (k_squared ** 2) * dxdy
+
+    C = (((1 / T) ** 2) * integral) ** (1 / 2)  # This is essentially the difference between a and b_moved
+    distance = np.sqrt((C ** 2) + (np.sum(translation_vector ** 2)))  # Here we add the translation vector and normalize
+
+    return distance

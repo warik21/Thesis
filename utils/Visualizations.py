@@ -103,3 +103,19 @@ def plot2D_samples_mat(xs, xt, G, thr=1e-8, **kwargs):
             if G[i, j] / mx > thr:
                 plt.plot([xs[i, 0], xt[j, 0]], [xs[i, 1], xt[j, 1]],
                          alpha=G[i, j] / mx, **kwargs)
+
+
+def create_subplot(ax, data, title, cmap='gray', label='Magnitude'):
+    """
+    Creates a subplot for a given dataset.
+
+    Parameters:
+    - ax: The axes object where the plot will be drawn.
+    - data: The data to be displayed in the subplot.
+    - title: The title of the subplot.
+    - cmap: Colormap used for the plot.
+    - label: Label for the colorbar.
+    """
+    im = ax.imshow(data, cmap=cmap)
+    plt.colorbar(im, ax=ax, label=label)
+    ax.set_title(title)
