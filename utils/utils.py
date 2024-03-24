@@ -494,10 +494,10 @@ def create_distribs_and_costs(res, noise, scale_parameter=1, distance_metric='L2
 def create_images_and_costs(im1_base, im2_base, noise, distance_metric='L1'):
     """
     This function creates two 1D distributions and a cost matrix between them.
-    :param im2_base: The initial image 2
-    :param im1_base: The initial image 1
-    :param noise: noise parameter
-    :param distance_metric: distance metric to use
+    :param im2_base(np.ndarray): The second image to compare.
+    :param im1_base(np.ndarray): The first image to compare.
+    :param noise(float): The noise parameter.
+    :param distance_metric(str): The distance metric to use.
     :return: p, q, C
     """
     C = calculate_costs(im1_base.shape, distance_metric=distance_metric)
@@ -730,3 +730,19 @@ def Fourier2(a, b, T=2*np.pi) -> float:
     distance = np.sqrt((C ** 2) + (np.sum(translation_vector ** 2)))  # Here we add the translation vector and normalize
 
     return distance
+
+def noise_and_prep_images(im1: np.ndarray, im2, noise_param, distance_metric='L2'):
+    """
+    This function takes two images and a noise parameter and returns the noised images and the cost matrix between them.
+    :param im1(np.ndarray): The first image to compare.
+    :param im2(np.ndarray): The second image to compare.
+    :param noise_param(float): The noise parameter.
+    :param distance_metric(str): The distance metric to use.
+    :return: im1_noised, im2_noised, C
+    """
+    C = calculate_costs(im1.shape, distance_metric=distance_metric)
+
+    im1_noised = noise_image(im1, noise_param)
+    im2_noised = noise_image(im2, noise_param)
+
+    return im1_noised, im2_noised, C
