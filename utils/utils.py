@@ -7,6 +7,8 @@ from scipy.special import logsumexp
 import pandas as pd
 import cvxpy as cp
 from scipy.stats import norm, sem, t
+import time
+from typing import Tuple
 
 
 def solve_ot_dual(c, mu, nu):
@@ -731,18 +733,21 @@ def Fourier2(a, b, T=2*np.pi) -> float:
 
     return distance
 
-def noise_and_prep_images(im1: np.ndarray, im2, noise_param, distance_metric='L2'):
-    """
-    This function takes two images and a noise parameter and returns the noised images and the cost matrix between them.
-    :param im1(np.ndarray): The first image to compare.
-    :param im2(np.ndarray): The second image to compare.
-    :param noise_param(float): The noise parameter.
-    :param distance_metric(str): The distance metric to use.
-    :return: im1_noised, im2_noised, C
-    """
-    C = calculate_costs(im1.shape, distance_metric=distance_metric)
+def calculate_and_time_wasserstein(image1, image2, cost_matrix) -> Tuple[float, float]:
+    start_time = time.time()
+    distance = ot.emd2(image1.flatten(), image2.flatten(), cost_matrix)
+    elapsed_time = time.time() - start_time
+    return distance, elapsed_time
 
-    im1_noised = noise_image(im1, noise_param)
-    im2_noised = noise_image(im2, noise_param)
+def calculate_and_time_fourier(image1, image2) -> Tuple[float, float]:
+    start_time = time.time()
+    distance = Fourier1(image1, image2)
+    elapsed_time = time.time() - start_time
+    return distance, elapsed_time
 
-    return im1_noised, im2_noised, C
+def calculate_and_time_l2(image1, image2) -> Tuple[float, float]:
+    start_time = time.time()
+    distance = np.linalg.norm(image1 - image2)
+    elapsed_time = time.time() - start_time
+    return distance, elapsed_time
+
