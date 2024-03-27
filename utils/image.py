@@ -22,6 +22,7 @@ class Image:
         if self.shape[0] != self.resolution:
             self.image = self.resize(self.resolution, self.resolution)
             self.shape = self.image.shape
+        self.original_sum = self.image.sum()
         self.normalize()
 
 
@@ -59,10 +60,12 @@ class Image:
         return f"Image: {self.path}, Shape: {self.shape}"
     
     @staticmethod
-    def process_images(image1, image2, noise_param):
+    def process_images(image1, image2, noise_param1, noise_param2=None):
+        if noise_param2 is None:
+            noise_param2 = noise_param1
         # Apply noise and split each image
-        image1.split_image(noise_param=noise_param)
-        image2.split_image(noise_param=noise_param)
+        image1.split_image(noise_param=noise_param1)
+        image2.split_image(noise_param=noise_param2)
 
         # Mix and normalize the positive and negative parts
         image1.image_post = image1.positive + image2.negative
@@ -76,7 +79,10 @@ class Image:
         image2.image_noised = image2.image_noised / np.sum(image2.image_noised)
 
     @classmethod
-    def analyze_image_pair(cls, image1, image2, cost_matrix, num_samples, noise_param):
+    def analyze_image_pair(cls, image1, image2, cost_matrix, num_samples, noise_param1, noise_param2=None):
+        if noise_param2 is None:
+            noise_param2 = noise_param1
+
         w1_dists_noised = []
         times_w1 = []
         f_dists_noised = []
@@ -85,10 +91,10 @@ class Image:
         times_l2 = []
 
         for _ in range(num_samples):
-            cls.process_images(image1, image2, noise_param)  # Adjusted for class method context
+            cls.process_images(image1, image2, noise_param1, noise_param2)  # Adjusted for class method context
 
             w_dist, w_time = calculate_and_time_wasserstein(image1.image_post, image2.image_post, cost_matrix)
-            f_dist, f_time = calculate_and_time_fourier(image1.image_post, image2.image_post)
+            f_dist, f_time = calculate_and_time_fourier(image1.image_noised, image2.image_noised)
             l_dist, l_time = calculate_and_time_l2(image1.image_noised, image2.image_noised)
 
             w1_dists_noised.append(w_dist)
