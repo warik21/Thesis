@@ -475,6 +475,7 @@ def Fourier1(mu, nu, T=2 * np.pi) -> float:
 
     return integral
 
+
 def Fourier2(a, b, T=2*np.pi) -> float:
     m, n = np.shape(a)
     dxdy = (T / m) * (T / n)
@@ -513,17 +514,20 @@ def Fourier2(a, b, T=2*np.pi) -> float:
 
     return distance
 
+
 def calculate_and_time_wasserstein(image1, image2, cost_matrix) -> Tuple[float, float]:
     start_time = time.time()
     distance = ot.emd2(image1.flatten(), image2.flatten(), cost_matrix)
     elapsed_time = time.time() - start_time
     return distance, elapsed_time
 
+
 def calculate_and_time_fourier(image1, image2) -> Tuple[float, float]:
     start_time = time.time()
     distance = Fourier1(image1, image2)
     elapsed_time = time.time() - start_time
     return distance, elapsed_time
+
 
 def calculate_and_time_l2(image1, image2) -> Tuple[float, float]:
     start_time = time.time()

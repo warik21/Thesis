@@ -113,3 +113,32 @@ class Image:
         time_l2 = np.mean(times_l2)
 
         return w1_dist_noised, f_dist_noised, l2_dist_noised, time_w1, time_f, time_l2
+    
+    @classmethod
+    def analyze_image_pair_without_wasserstein(cls, image1, image2, num_samples, noise_param1, noise_param2=None):
+        if noise_param2 is None:
+            noise_param2 = noise_param1
+
+        f_dists_noised = []
+        times_f = []
+        l2_dists_noised = []
+        times_l2 = []
+
+        for _ in range(num_samples):
+            cls.process_images(image1, image2, noise_param1, noise_param2)  # Adjusted for class method context
+
+            f_dist, f_time = calculate_and_time_fourier(image1.image_noised, image2.image_noised)
+            l_dist, l_time = calculate_and_time_l2(image1.image_noised, image2.image_noised)
+
+            f_dists_noised.append(f_dist)
+            times_f.append(f_time)
+            l2_dists_noised.append(l_dist)
+            times_l2.append(l_time)
+
+        f_dist_noised = np.mean(f_dists_noised)
+        l2_dist_noised = np.mean(l2_dists_noised)
+
+        time_f = np.mean(times_f)
+        time_l2 = np.mean(times_l2)
+
+        return f_dist_noised, l2_dist_noised, time_f, time_l2
