@@ -93,7 +93,7 @@ class Image:
         for _ in range(num_samples):
             cls.process_images(image1, image2, noise_param1, noise_param2)
             w_dist, w_time = calculate_and_time_wasserstein(image1.image_post, image2.image_post, cost_matrix)
-            f_dist, f_time = calculate_and_time_fourier(image1.image_noised, image2.image_noised)
+            f_dist, f_time = calculate_and_time_fourier1(image1.image_noised, image2.image_noised)
             l_dist, l_time = calculate_and_time_l2(image1.image_noised, image2.image_noised)
 
             w1_dists_noised.append(w_dist)
@@ -125,7 +125,7 @@ class Image:
 
         for _ in range(num_samples):
             cls.process_images(image1, image2, noise_param1, noise_param2)
-            f_dist, f_time = calculate_and_time_fourier(image1.image_noised, image2.image_noised)
+            f_dist, f_time = calculate_and_time_fourier1(image1.image_noised, image2.image_noised)
             l_dist, l_time = calculate_and_time_l2(image1.image_noised, image2.image_noised)
 
             f_dists_noised.append(f_dist)

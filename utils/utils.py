@@ -526,9 +526,16 @@ def calculate_and_time_wasserstein(image1, image2, cost_matrix) -> Tuple[float, 
     return distance, elapsed_time
 
 
-def calculate_and_time_fourier(image1, image2) -> Tuple[float, float]:
+def calculate_and_time_fourier1(image1, image2) -> Tuple[float, float]:
     start_time = time.time()
     distance = Fourier1(image1, image2)
+    elapsed_time = time.time() - start_time
+    return distance, elapsed_time
+
+
+def calculate_and_time_fourier2(image1, image2) -> Tuple[float, float]:
+    start_time = time.time()
+    distance = Fourier2(image1, image2)
     elapsed_time = time.time() - start_time
     return distance, elapsed_time
 

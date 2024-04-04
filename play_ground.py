@@ -39,7 +39,7 @@ for category in category_names:
                 image1 = Image(resolution, category, image_pair[0], full_path)
                 image2 = Image(resolution, category, image_pair[1], full_path)
                 
-                f_dist_original, f_time_original = calculate_and_time_fourier(image1.image, image2.image)
+                f_dist_original, f_time_original = calculate_and_time_fourier1(image1.image, image2.image)
                 l2_dist_original, l2_time_original = calculate_and_time_l2(image1.image, image2.image)
 
                 results = Image.analyze_image_pair_without_wasserstein(image1, image2, 
