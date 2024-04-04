@@ -321,13 +321,17 @@ def noise_from_SNR(SNR, signal_power, res):
     """
     This function calculates the noise power from the SNR and the signal power. and decides what the noise parameter
     is according to the power. The noise is assumed to be Gaussian.
-    :param res:
-    :param SNR:
-    :param signal_power:
-    :return:
+    
+    Args:
+        SNR (float): The signal-to-noise ratio.
+        signal_power (float): The power of the signal.
+        res (int): The resolution of the signal.
+
+    Returns:
+        noise_param (float): The noise parameter.
     """
     noise_power = signal_power / SNR
-    noise_param = np.sqrt(noise_power / res)
+    noise_param = np.sqrt(noise_power / (res**2))
     return noise_param
 
 

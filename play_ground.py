@@ -7,10 +7,11 @@ from utils.image import Image
 
 dotmark_pictures_path = "..\\DOTmark_1.0\\Pictures\\"
 full_path = os.path.join(os.getcwd(), dotmark_pictures_path)
-resolutions = [32, 64, 128, 256, 512]
+resolutions = [32, 64, 128, 256]
 # resolutions = [32]
 image_numbers = ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10']
 SNR_values = np.logspace(start=5, stop=1, num=11)
+noise_values = np.logspace(start=-3, stop=1, num=11)
 df_im_l1 = pd.DataFrame()
 
 categories_pattern = os.path.join(dotmark_pictures_path, "*")
@@ -28,8 +29,12 @@ for category in category_names:
     print(f"Processing category: {category}")
     for resolution in resolutions:
         print(f"Processing resolution: {resolution}")
-        for SNR in SNR_values:
-            noise_param = noise_from_SNR(SNR, 1, resolution)
+        for noise_param in noise_values:
+            noise_param_original = noise_param
+            noise_param = noise_param / (resolution**2)
+            SNR = 1/noise_param
+        #for SNR in SNR_values:
+        #    noise_param = noise_from_SNR(SNR, 1, resolution)
             for image_pair in pairs:
                 image1 = Image(resolution, category, image_pair[0], full_path)
                 image2 = Image(resolution, category, image_pair[1], full_path)
@@ -46,7 +51,7 @@ for category in category_names:
                     'Category': category,
                     'image1_index': image_pair[0],
                     'image2_index': image_pair[1],
-                    'Noise': noise_param,
+                    'Noise': noise_param_original,
                     'SNR': SNR,
                     'Resolution': resolution,
                     'Fourier Original': f_dist_original, 
@@ -59,4 +64,4 @@ for category in category_names:
                     'L2 Time': time_l2}
                 df_res = df_res._append(new_row, ignore_index=True)
 
-df_res.to_csv("results.csv", index=False)
+df_res.to_csv("results2.csv", index=False)
