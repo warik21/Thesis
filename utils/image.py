@@ -71,12 +71,16 @@ class Image:
         image1.image_post = image1.positive + image2.negative
         image2.image_post = image2.positive + image1.negative
 
+        # Save the post images before normalization
+        image1.image_post_noised = image1.image_post.copy()
+        image2.image_post_noised = image2.image_post.copy()
+
         # Normalize the posterior images
         image1.image_post = image1.image_post / np.sum(image1.image_post)
         image2.image_post = image2.image_post / np.sum(image2.image_post)
 
-        image1.image_noised = image1.image_noised / np.sum(image1.image_noised)
-        image2.image_noised = image2.image_noised / np.sum(image2.image_noised)
+        # image1.image_noised = image1.image_noised / np.sum(image1.image_noised)
+        # image2.image_noised = image2.image_noised / np.sum(image2.image_noised)
 
     @classmethod
     def analyze_image_pair(cls, image1, image2, cost_matrix, num_samples, noise_param1, noise_param2=None):
