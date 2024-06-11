@@ -93,12 +93,15 @@ class Image:
         times_f = []
         l2_dists_noised = []
         times_l2 = []
+        u_dists_noised = []
+        times_u = []
 
         for _ in range(num_samples):
             cls.process_images(image1, image2, noise_param1, noise_param2)
             w_dist, w_time = calculate_and_time_wasserstein(image1.image_post, image2.image_post, cost_matrix)
             f_dist, f_time = calculate_and_time_fourier1(image1.image_noised, image2.image_noised)
             l_dist, l_time = calculate_and_time_l2(image1.image_noised, image2.image_noised)
+            u_dist, u_time = calculate_and_time_UOT(image1.image_post, image2.image_post, cost_matrix)
 
             w1_dists_noised.append(w_dist)
             times_w1.append(w_time)
@@ -106,16 +109,66 @@ class Image:
             times_f.append(f_time)
             l2_dists_noised.append(l_dist)
             times_l2.append(l_time)
+            u_dists_noised.append(u_dist)
+            times_u.append(u_time)
 
         w1_dist_noised = np.mean(w1_dists_noised)
         f_dist_noised = np.mean(f_dists_noised)
         l2_dist_noised = np.mean(l2_dists_noised)
+        u_dist_noised = np.mean(u_dists_noised)
 
         time_w1 = np.mean(times_w1)
         time_f = np.mean(times_f)
         time_l2 = np.mean(times_l2)
+        time_u = np.mean(times_u)
 
-        return w1_dist_noised, f_dist_noised, l2_dist_noised, time_w1, time_f, time_l2
+        return {
+        "w1": {
+            "distance": w1_dist_noised,
+            "time": time_w1
+        },
+        "f": {
+            "distance": f_dist_noised,
+            "time": time_f
+        },
+        "l2": {
+            "distance": l2_dist_noised,
+            "time": time_l2
+        },
+        "u": {
+            "distance": u_dist_noised,
+            "time": time_u
+        }
+    }
+
+
+    @classmethod
+    def calculate_distances(cls, image1, image2, cost_matrix):
+        # Calculate original distances without noise
+        w1_dist_original, w1_time_original = calculate_and_time_wasserstein(image1.image, image2.image, cost_matrix)
+        f_dist_original, f_time_original = calculate_and_time_fourier1(image1.image, image2.image)
+        l2_dist_original, l2_time_original = calculate_and_time_l2(image1.image, image2.image)
+        u_dist_original, u_time_original = calculate_and_time_UOT(image1.image, image2.image, cost_matrix)
+        
+        return {
+            "w1": {
+                "distance": w1_dist_original,
+                "time": w1_time_original
+            },
+            "f": {
+                "distance": f_dist_original,
+                "time": f_time_original
+            },
+            "l2": {
+                "distance": l2_dist_original,
+                "time": l2_time_original
+            },
+            "u": {
+                "distance": u_dist_original,
+                "time": u_time_original
+            }
+        }
+
     
     @classmethod
     def analyze_image_pair_without_wasserstein(cls, image1, image2, num_samples, noise_param1, noise_param2=None):

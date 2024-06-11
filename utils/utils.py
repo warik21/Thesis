@@ -546,3 +546,10 @@ def calculate_and_time_l2(image1, image2) -> Tuple[float, float]:
     elapsed_time = time.time() - start_time
     return distance, elapsed_time
 
+
+def calculate_and_time_UOT(image1, image2, cost_matrix, reg=1e-3, reg_m=1e-3) -> Tuple[float, float]:
+    start_time = time.time()
+    distance = ot.unbalanced.sinkhorn_unbalanced(image1.flatten(), image2.flatten(), 
+                                                  cost_matrix, reg, reg_m)
+    elapsed_time = time.time() - start_time
+    return distance, elapsed_time
