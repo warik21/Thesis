@@ -1,17 +1,19 @@
 import numpy as np
 import sys
+
 sys.path.append('C:/Users/eriki/OneDrive/Documents/all_folder/Thesis/Thesis/utils')
-from Classes import TransportResults
 import ot
 from scipy.special import logsumexp
 import pandas as pd
-import cvxpy as cp
+# import cvxpy as cp
 from scipy.stats import norm, sem, t
 import time
 from typing import Tuple
+from pydantic import BaseModel
+from typing import Optional
 
 
-def calc_transport_pot_emd(source, target, costs) -> (np.ndarray, float): # type: ignore
+def calc_transport_pot_emd(source, target, costs) -> (np.ndarray, float):  # type: ignore
     """
     Implementation for solving ot using emd
     Also works on Unbalanced data
@@ -26,7 +28,20 @@ def calc_transport_pot_emd(source, target, costs) -> (np.ndarray, float): # type
     return Transport_plan, Transport_cost
 
 
-def split_signed_measure(src: np.ndarray) -> (np.ndarray, np.ndarray): # type: ignore
+class TransportResults(BaseModel):
+    transport_plan: np.ndarray  # shape=(dim_source, dim_target)
+    source_distribution: np.ndarray  # shape=(dim_source,)
+    target_distribution: np.ndarray  # shape=(dim_target,)
+    transported_mass: float  # transported mass, sum of transport_plan, the same as cost.
+    lift_parameter: Optional[float] = None  # lift, the amount by which we lifted the distributions
+    Pos_plan: Optional[np.ndarray] = None  # shape=(dim_source, dim_target)
+    Neg_plan: Optional[np.ndarray] = None  # shape=(dim_source, dim_target)
+
+    class Config:
+        arbitrary_types_allowed = True
+
+
+def split_signed_measure(src: np.ndarray) -> (np.ndarray, np.ndarray):  # type: ignore
     """
     This function splits the source measure into positive and negative parts.
     :param src: distribution to split
@@ -108,11 +123,11 @@ def calculate_costs(size, distance_metric='L1'):
     # 2D case:
     elif len(size) == 2:
         I, J = np.indices(size)
-        
+
         # Flatten the indices to create 1D arrays of x and y coordinates
         I_flat = I.flatten()
         J_flat = J.flatten()
-        
+
         # Calculate distances using broadcasting
         if distance_metric == 'L1':
             costs = np.sqrt((I_flat[:, None] - I_flat[None, :]) ** 2 + (J_flat[:, None] - J_flat[None, :]) ** 2)
@@ -156,7 +171,7 @@ def run_experiment_and_append(df, p, q, res, SNR, scale_param, num_samples=100, 
         'Distances_Noised': results['mean_noised'],
         'CI_Distances_Noised': results['ci_noised'],
         'Ratios_EMD': np.mean(results['ratios_emd']),
-        'Distances_Linear':  np.mean(results['linear']),
+        'Distances_Linear': np.mean(results['linear']),
         'Distances_Linear_Noised': np.mean(results['linear_noised']),
         'Ratios_Linear': np.mean(results['ratios_linear'])
     }
@@ -221,7 +236,8 @@ def run_experiment_and_append_images(df, im1, im2, SNR, distance_metric='L2', n_
 
     for i in range(n_samples):
         im1_noised, im2_noised, im1_post, im2_post, C = create_images_and_costs(im1_base=im1, im2_base=im2,
-                                                                                noise=noise_param, distance_metric=distance_metric)
+                                                                                noise=noise_param,
+                                                                                distance_metric=distance_metric)
 
         results_classic_add = calc_transport_pot_emd(im1.flatten(), im2.flatten(), C)[1]
         results_noised_add = calc_transport_pot_emd(im1_post.flatten(), im2_post.flatten(), C)[1]
@@ -331,7 +347,7 @@ def noise_from_SNR(SNR, signal_power, res):
         noise_param (float): The noise parameter.
     """
     noise_power = signal_power / SNR
-    noise_param = np.sqrt(noise_power / (res**2))
+    noise_param = np.sqrt(noise_power / (res ** 2))
     return noise_param
 
 
@@ -364,7 +380,6 @@ def prep_signed_measures(p_pos, p_neg, q_pos, q_neg):
 
 
 def get_distance_matrix(res, distance_metric='L2'):
-
     X = np.linspace(0, 1, res)
     C = np.zeros([res, res], dtype=np.float64)
     if distance_metric == 'L1':
@@ -457,19 +472,19 @@ def Fourier1(mu, nu, T=2 * np.pi) -> float:
     nu_hat = np.fft.fft2(nu)
     m, n = mu.shape
     dxdy = (m / T) * (n / T)
-    
+
     integral = 0
 
     for y in range(n):
         for x in range(m):
             if x == 0 and y == 0:
                 continue
-            
+
             kx = x * (2 * np.pi / m)
             ky = y * (2 * np.pi / n)
 
             # Compute the squared magnitude of the frequency vector
-            k_squared = kx**2 + ky**2
+            k_squared = kx ** 2 + ky ** 2
 
             # Increment the integral value
             diff = mu_hat[y, x] - nu_hat[y, x]
@@ -480,7 +495,7 @@ def Fourier1(mu, nu, T=2 * np.pi) -> float:
     return integral
 
 
-def Fourier2(a, b, T=2*np.pi) -> float:
+def Fourier2(a, b, T=2 * np.pi) -> float:
     m, n = np.shape(a)
     dxdy = (T / m) * (T / n)
 
@@ -549,7 +564,7 @@ def calculate_and_time_l2(image1, image2) -> Tuple[float, float]:
 
 def calculate_and_time_UOT(image1, image2, cost_matrix, reg=1e-3, reg_m=1e-3) -> Tuple[float, float]:
     start_time = time.time()
-    distance = ot.unbalanced.sinkhorn_unbalanced(image1.flatten(), image2.flatten(), 
-                                                  cost_matrix, reg, reg_m)
+    distance = ot.unbalanced.sinkhorn_unbalanced(image1.flatten(), image2.flatten(),
+                                                 cost_matrix, reg, reg_m)
     elapsed_time = time.time() - start_time
     return distance, elapsed_time

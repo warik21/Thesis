@@ -7,8 +7,9 @@
       <excludeFolder url="file://$MODULE_DIR$/Thesis_enviroment" />
       <excludeFolder url="file://$MODULE_DIR$/enviroment" />
       <excludeFolder url="file://$MODULE_DIR$/venv" />
+      <excludeFolder url="file://$MODULE_DIR$/ThesisEnv" />
     </content>
-    <orderEntry type="jdk" jdkName="Thesis enviroment" jdkType="Python SDK" />
+    <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />
   </component>
 </module>

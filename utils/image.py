@@ -1,6 +1,7 @@
-import cv2 
+import cv2
 import sys
 import os
+
 sys.path.append('C:/Users/eriki/OneDrive/Documents/all_folder/Thesis/Thesis/utils')
 from utils.utils import *
 from typing import Optional
@@ -8,13 +9,14 @@ import numpy as np
 import ot
 import time
 
+
 class Image:
-    def __init__(self, resolution: int, category: str, index: int, 
+    def __init__(self, resolution: int, category: str, index: int,
                  main_path: str = 'C:/Users/eriki/OneDrive/Documents/all_folder/Thesis/DOTMark_1.0/Pictures'):
         self.resolution = resolution
         self.category = category
         if len(index.__str__()) == 1:
-            index = f"0{index+1}"  # The index is between 0 and 9, so we add 1 to it
+            index = f"0{index + 1}"  # The index is between 0 and 9, so we add 1 to it
         self.index = index.__str__()
         self.path = os.path.join(main_path, category, f"picture{resolution}_10{index}.png")
         self.image = cv2.imread(self.path, cv2.IMREAD_GRAYSCALE)
@@ -25,32 +27,31 @@ class Image:
         self.original_sum = self.image.sum()
         self.normalize()
 
-
     def noise(self, mean=0, std=0.1) -> np.ndarray:
         noise_array = np.random.normal(mean, std, self.image.shape)
         self.image_noised = self.image + noise_array
         return self.image_noised
-    
-    def normalize(self) -> np.ndarray: 
+
+    def normalize(self) -> np.ndarray:
         self.image = self.image / self.image.sum()
         return self.image
-    
+
     def resize(self, width, height) -> np.ndarray:
         self.image = cv2.resize(self.image, (width, height))
         return self.image
-    
+
     def f_12(self, second_image) -> np.ndarray:
         if second_image.sum != 1:
             second_image = second_image / second_image.sum()
         pfm = Fourier1(self.image, second_image)
         return pfm
-    
+
     def f_22(self, second_image) -> np.ndarray:
         if second_image.sum != 1:
             second_image = second_image / second_image.sum()
         pfm = Fourier2(self.image, second_image)
         return pfm
-    
+
     def split_image(self, noise_param=1e-3) -> np.ndarray:
         self.noise(std=noise_param)
         self.positive, self.negative = split_signed_measure(self.image_noised)
@@ -58,7 +59,7 @@ class Image:
 
     def __repr__(self):
         return f"Image: {self.path}, Shape: {self.shape}"
-    
+
     @staticmethod
     def process_images(image1, image2, noise_param1, noise_param2=None):
         if noise_param2 is None:
@@ -123,24 +124,23 @@ class Image:
         time_u = np.mean(times_u)
 
         return {
-        "w1": {
-            "distance": w1_dist_noised,
-            "time": time_w1
-        },
-        "f": {
-            "distance": f_dist_noised,
-            "time": time_f
-        },
-        "l2": {
-            "distance": l2_dist_noised,
-            "time": time_l2
-        },
-        "u": {
-            "distance": u_dist_noised,
-            "time": time_u
+            "w1": {
+                "distance": w1_dist_noised,
+                "time": time_w1
+            },
+            "f": {
+                "distance": f_dist_noised,
+                "time": time_f
+            },
+            "l2": {
+                "distance": l2_dist_noised,
+                "time": time_l2
+            },
+            "u": {
+                "distance": u_dist_noised,
+                "time": time_u
+            }
         }
-    }
-
 
     @classmethod
     def calculate_distances(cls, image1, image2, cost_matrix):
@@ -149,7 +149,7 @@ class Image:
         f_dist_original, f_time_original = calculate_and_time_fourier1(image1.image, image2.image)
         l2_dist_original, l2_time_original = calculate_and_time_l2(image1.image, image2.image)
         u_dist_original, u_time_original = calculate_and_time_UOT(image1.image, image2.image, cost_matrix)
-        
+
         return {
             "w1": {
                 "distance": w1_dist_original,
@@ -169,7 +169,6 @@ class Image:
             }
         }
 
-    
     @classmethod
     def analyze_image_pair_without_wasserstein(cls, image1, image2, num_samples, noise_param1, noise_param2=None):
         if noise_param2 is None:
