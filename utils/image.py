@@ -16,7 +16,7 @@ class Image:
         self.resolution = resolution
         self.category = category
         if len(index.__str__()) == 1:
-            index = f"0{index + 1}"  # The index is between 0 and 9, so we add 1 to it
+            index = f"0{index}"  # The index is between 0 and 9, so we add 1 to it
         self.index = index.__str__()
         self.path = os.path.join(main_path, category, f"picture{resolution}_10{index}.png")
         self.image = cv2.imread(self.path, cv2.IMREAD_GRAYSCALE)
